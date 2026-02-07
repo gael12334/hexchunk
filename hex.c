@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
+#include <ctype.h>
 #include <linux/limits.h>
 
 #define CHUNK 1024
@@ -32,6 +33,14 @@ struct {
     FILE* file;
     long size;
 } program = {0};
+
+int str_is_int(char* str) {
+    int valid = 1;
+    for(char* pchr = str; *pchr != '\0' && valid == 1; pchr++) {
+        valid &= isdigit(*pchr) ? 1 : 0;
+    }
+    return valid;
+}
 
 int close_file(void) {
     if(program.file == NULL) {
@@ -89,9 +98,8 @@ void show_chunk(void) {
 
     printf("%-6s ", "");
     for (long i = 0; i < line_length; i++) {
-        printf("%02lx ", i);
+        printf(".%lX ", i);
     }
-    puts("\n");
     
     long row = 0;
     long col = 0;
@@ -104,13 +112,13 @@ void show_chunk(void) {
     chrstr chrbuf;
 
     while(ndx < chunk.used) {
-        printf("%06lx ", chunk.offset + ndx); 
+        printf("\n%06lx ", chunk.offset + ndx); 
 
         memset(hexbuf, 0, sizeof(hexbuf));
         memset(chrbuf, 0, sizeof(chrbuf));
 
         for(col = 0; col < LINE_LENGTH; col++) {
-            snprintf(hexbuf[col], sizeof(hexbuf[col]), "%02x", chunk.data[ndx]);
+            snprintf(hexbuf[col], sizeof(hexbuf[col]), "%02X", chunk.data[ndx]);
             chrbuf[col] = (chunk.data[ndx] >= 0 && chunk.data[ndx] < 32) ? '.' : chunk.data[ndx];
             ndx++;
         }
@@ -118,76 +126,85 @@ void show_chunk(void) {
         for(col = 0; col < LINE_LENGTH; col++) {
             printf("%s ", hexbuf[col]);
         }
-        printf("%s\n", chrbuf);
+        printf("%s", chrbuf);
     }
     puts("\n");
 }
 
 int cmd_openfile(int argc, char** argv) {
-    if(strcmp(argv[0], "openfile") != 0) {
+#define CMD "open"
+    if(strcmp(argv[0], CMD) != 0) {
         return ERR_CMD;
     }
 
     if(argc != 2) {
-        printf("openfile: expected 2 arguments.\n");
+        printf(CMD ": expected 2 arguments.\n");
         return ERR_ARGC;
     }
 
     int result = open_file(argv[1]);
     if(result == ERR_FOPEN) {
-        printf("openfile: unable to open %s\n", argv[1]);
+        printf(CMD ": unable to open %s\n", argv[1]);
         return result;
     }
 
-    printf("openfile: file %s loaded\n", argv[1]);
+    printf(CMD ": file %s loaded\n", argv[1]);
     return OK;
+#undef CMD
 }
 
 int cmd_closefile(int argc, char** argv) {
-    if(strcmp(argv[0], "closefile") != 0) {
+#define CMD "close"
+    if(strcmp(argv[0], CMD) != 0) {
         return ERR_CMD;
     }
 
     int result = close_file();
     if(result == ERR_FILE_NULL) {
-        printf("closefile: no file loaded.\n");
+        printf(CMD ": no file loaded.\n");
+        return result;
     }
 
+    printf(CMD ": file %s unloaded\n", program.path);
     return result;
+#undef CMD
 }
 
 int cmd_showfile(int argc, char** argv) {
-    if(strcmp(argv[0], "showfile") != 0) {
+#define CMD "show"
+    if(strcmp(argv[0], CMD) != 0) {
         return ERR_CMD;
     }
 
     if(argc != 3) {
-        printf("showfile: expected 3 arguments.\n");
+        printf(CMD ": expected 3 arguments.\n");
         return ERR_ARGC;
     }
 
-    char* end;
-    long off = strtol(argv[1], &end, 10);
-    long size = strtol(argv[2], &end, 10);
+    int off_valid = str_is_int(argv[1]);
+    int size_valid = str_is_int(argv[2]);
 
-    if(off == 0 || size == 0) {
-        printf("showfile: invalid offset or size.\n");
+    if(!off_valid || !size_valid) {
+        printf(CMD ": invalid offset or size.\n");
         return ERR_RANGE;
     }
-    off--;
+
+    long off = strtol(argv[1], NULL, 10);
+    long size = strtol(argv[2], NULL, 10);
 
     int result = read_file(off, size);
     if(result == ERR_FILE_NULL) {
-        printf("showfile: no file loaded.\n");
+        printf(CMD ": no file loaded.\n");
     }
     else if (result == ERR_RANGE) {
-        printf("showfile: range is invalid.\n");
+        printf(CMD ": range is invalid.\n");
     }
     else {
         show_chunk();
     }
 
     return result;
+#undef CMD
 }
 
 int main(int argc, char** argv) {
@@ -224,7 +241,8 @@ int main(int argc, char** argv) {
         
         if(cmd_closefile(argc, pointers) == OK)
             continue;
-    
+
+        printf("unknown command\n");
     }
 
     close_file();
