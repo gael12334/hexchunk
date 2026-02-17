@@ -60,6 +60,15 @@ int error_invalid_arguments(int got_argc, int expected_argc) {
     return OK;
   }
 
-  printf("error: expected %i args, got %i.\n", expected_argc, got_argc);
+  printf("error: expected %i args, got %i\n", expected_argc, got_argc);
+  return ERR_ARGC;
+}
+
+int error_not_enough_args(int got_argc, int expected_argc) {
+  if (got_argc >= expected_argc) {
+    return OK;
+  }
+
+  printf("error: expected at least %i args, got %i\n", expected_argc, got_argc);
   return ERR_ARGC;
 }

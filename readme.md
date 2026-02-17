@@ -2,17 +2,17 @@ Copyright (c) 2026 Gaël Fortier
 
 ## Hexchunk
 
-A small CLI app to display hex values of a large file in chunks of 1024 bytes. I made this as a tool to help me recover a large corrupted archive. 
+A small CLI app to display hex values of a large file in chunks of ~~1024~~ 8192 bytes. I made this as a tool to help me recover a large corrupted archive (and later found out some parts where whiped out).
 
 Available commands: 
 
 - `open <path> `: open a file
 - `close` : close the opened file
-- `skip <offset>` : step over N bytes in file
-- `next <size>` : display the next N bytes in file
+- `skip <offset>` : step over N bytes in file (new: next with no arguments skips the next 8192 bytes)
+- `next <size>` : display the next N bytes in file (new: next with no arguments shows the next 8192 bytes)
 - `set <pointer>` : set the current position in file
 - `tell` : show the current position in file
-- `find <size> <ascii>` : find in the next N bytes an ascii pattern in file
+- `scan <output-path>` : scans the entire device or file for non-zeroed memory chunks.
 
 ## Disclamer
 

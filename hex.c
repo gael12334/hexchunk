@@ -3,26 +3,15 @@
  */
 
 #include <assert.h>
-#include <ctype.h>
 #include <linux/limits.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-#define CHUNK 1024
+#define CHUNK 8192
 #define OK 0
-#define ERR_FOPEN 1
-#define ERR_FILE_NULL 2
-#define ERR_RANGE 3
-#define ERR_ARGC 4
-#define ERR_CMD 5
-#define ERR_NUMBER 6
-#define INPUT_BUFFER 512
-#define LINE_LENGTH 16
-#define BYTE_LENGTH 3
-#define OFFSET_LENGTH 6
-#define MAX_POINTERS 10
+#define ERR 1
 
 struct {
   long offset;
@@ -44,9 +33,9 @@ extern int str_is_int(char *str, long *out);
 extern void byte_to_hex(char *hi, char *lo, uint8_t byte);
 extern const char *bytebuf_to_hexstr(uint8_t *row, size_t len);
 extern const char *bytebuf_to_asciistr(uint8_t *row, size_t len);
-extern void show_buffer_hex(uint8_t *buffer, long size, long start_at);
+extern void bytebuf_hexview(uint8_t *buffer, long size, long start_at);
 extern char **parse_input(char *buffer, size_t len, int *out);
-extern char *clistr_to_cstr(char *clistr, size_t len);
+extern int bytebuf_is_zeroed(uint8_t *buffer, long size);
 
 /*******************************************************************************
                               Error functions
@@ -57,38 +46,11 @@ extern int error_out_of_range(long pos, long length, long low, long high);
 extern int error_invalid_integer(int valid, const char *str);
 extern int error_no_file_loaded(FILE *file);
 extern int error_invalid_arguments(int got_argc, int expected_argc);
+extern int error_not_enough_args(int got_argc, int expected_argc);
 
 /*******************************************************************************
-                             Chunk functions
-********************************************************************************/
-
-int update_chunk(long size) {
-  int opt;
-  if ((opt = error_no_file_loaded(program.file)))
-    return opt;
-
-  long pos = ftell(program.file);
-  if ((opt = error_out_of_range(pos, size, 0, program.size - 1)))
-    return opt;
-
-  if (size < 0) {
-    fseek(program.file, size, SEEK_CUR);
-    fread(chunk.data, -size, 1, program.file);
-    fseek(program.file, size, SEEK_CUR);
-    chunk.used = -size;
-    chunk.offset = ftell(program.file);
-    return OK;
-  }
-
-  fread(chunk.data, size, 1, program.file);
-  chunk.used = size;
-  chunk.offset = pos;
-  return OK;
-}
-
-/*******************************************************************************
-                             File functions
-********************************************************************************/
+ *                            File functions
+ ********************************************************************************/
 
 int close_file(void) {
   int opt;
@@ -132,6 +94,131 @@ int file_at(long off) {
 
   fseek(program.file, 0, SEEK_SET);
   fseek(program.file, off, SEEK_SET);
+  return OK;
+}
+
+int create_file(const char *entered_path, FILE **file) {
+  static char path[PATH_MAX];
+  char choice = 0;
+  FILE *output;
+
+  realpath(entered_path, path);
+
+  output = fopen(path, "r");
+  if (output == NULL)
+    goto newfile;
+  else
+    goto prompt;
+
+prompt:
+  fclose(output);
+
+  while (choice != 'y' && choice != 'n') {
+    printf("info: file %s already exists; overwrite? (y/n) > ", path);
+    choice = getchar();
+  }
+
+  if (choice == 'n') {
+    puts("info: scan aborted.");
+    return ERR;
+  }
+
+  goto newfile;
+
+newfile:
+  *file = fopen(path, "w");
+  return OK;
+}
+
+/*******************************************************************************
+                             Chunk functions
+********************************************************************************/
+
+int update_chunk(long size) {
+  int opt;
+  if ((opt = error_no_file_loaded(program.file)))
+    return opt;
+
+  long pos = ftell(program.file);
+  if ((opt = error_out_of_range(pos, size, 0, program.size)))
+    return opt;
+
+  if (size < 0) {
+    long new_pos = pos + size;
+    long new_size = -size;
+
+    fseek(program.file, new_pos, SEEK_SET);
+    fread(chunk.data, new_size, 1, program.file);
+    fseek(program.file, new_pos, SEEK_SET);
+    chunk.used = new_size;
+    chunk.offset = ftell(program.file);
+    return OK;
+  }
+
+  fread(chunk.data, size, 1, program.file);
+  chunk.used = size;
+  chunk.offset = pos;
+  return OK;
+}
+
+int scan_chunk(const char *entered_path, long chunks) {
+  int opt;
+  if ((opt = error_no_file_loaded(program.file)))
+    return opt;
+
+  FILE *output;
+  if ((opt = create_file(entered_path, &output)))
+    return opt;
+
+  long step;
+  long limit;
+  long chunk_count = 0;
+  int chunk_empty = 1;
+  int prev_empty = 2;
+  long pos = ftell(program.file);
+
+  chunks *= CHUNK;
+
+  if (chunks == 0)
+    limit = program.size;
+  else if ((opt = error_out_of_range(pos, chunks, 0, program.size)))
+    return opt;
+  else
+    limit = chunks;
+
+  for (long i = ftell(program.file); i < program.size; i += CHUNK) {
+    step = CHUNK;
+
+    if (i + step > program.size)
+      step = program.size - i - 1;
+
+    if ((opt = update_chunk(step)))
+      return opt;
+
+    chunk_empty = bytebuf_is_zeroed(chunk.data, chunk.used);
+    switch (prev_empty | chunk_empty) {
+    case 0b01:
+      fprintf(output, "%li chunks (%li)\n\n", chunk_count, chunk_count * CHUNK);
+      chunk_count = 0;
+      break;
+
+    case 0b10:
+      pos = ftell(program.file);
+      fprintf(output, "%li (%lX)\n", pos, pos);
+      chunk_count++;
+      break;
+
+    case 0b00:
+      chunk_count++;
+      break;
+    }
+
+    prev_empty = chunk_empty << 1;
+
+    fflush(output);
+  }
+
+  fclose(output);
   return OK;
 }
 
@@ -194,15 +281,17 @@ int cmd_set(int argc, char **argv) {
 */
 
 int cmd_skip(int argc, char **argv) {
-  long size;
+  long size = CHUNK;
   int opt, valid;
 
-  if ((opt = error_invalid_arguments(argc, 2)))
-    return opt;
+  if (argc >= 2) {
+    if ((opt = error_invalid_arguments(argc, 2)))
+      return opt;
 
-  valid = str_is_int(argv[1], &size);
-  if ((opt = error_invalid_integer(valid, argv[1])))
-    return opt;
+    valid = str_is_int(argv[1], &size);
+    if ((opt = error_invalid_integer(valid, argv[1])))
+      return opt;
+  }
 
   if (strcmp(argv[0], "next") == 0) {
     if ((opt = error_out_of_range(0, size, -CHUNK, CHUNK)))
@@ -235,7 +324,7 @@ int cmd_next(int argc, char **argv) {
   if ((opt = cmd_skip(argc, argv)))
     return opt;
 
-  show_buffer_hex(chunk.data, chunk.used, chunk.offset);
+  bytebuf_hexview(chunk.data, chunk.used, chunk.offset);
   return OK;
 }
 
@@ -255,10 +344,10 @@ int cmd_tell(int argc, char **argv) {
 }
 
 /*******************************************************************************
- *                          FINDNEXT
+ *                          SCAN_NEXT
  */
 
-int cmd_findnext(int argc, char **argv) {
+int cmd_scan_next(int argc, char **argv) {
   int opt, valid;
   long size;
 
@@ -269,9 +358,24 @@ int cmd_findnext(int argc, char **argv) {
   if ((opt = error_invalid_integer(valid, argv[1])))
     return opt;
 
-  char *text = clistr_to_cstr(argv[2], len);
+  return scan_chunk(argv[2], size);
+}
 
-  return OK;
+/*******************************************************************************
+ *                          SCAN
+ */
+
+int cmd_scan(int argc, char **args) {
+  int opt;
+
+  if ((opt = error_invalid_arguments(argc, 2)))
+    return opt;
+
+  if ((opt = error_no_file_loaded(program.file)))
+    return opt;
+
+  fseek(program.file, 0, SEEK_SET);
+  return scan_chunk(args[1], 0);
 }
 
 /*******************************************************************************
@@ -281,17 +385,18 @@ int cmd_findnext(int argc, char **argv) {
 void exec(const char *cmd, int argc, char **argv) {
   typedef struct cmd_map {
     const char *cmd;
-    int (*func)(int, char **);
+    int (*fn)(int, char **);
     const char *desc;
-  } cmd_map;
+  } cmdmap;
 
-  static const cmd_map map[] = {
-      (cmd_map){.cmd = "open", .func = cmd_open, .desc = "open P file."},
-      (cmd_map){.cmd = "close", .func = cmd_close, .desc = "close file."},
-      (cmd_map){.cmd = "skip", .func = cmd_skip, .desc = "skip N bytes."},
-      (cmd_map){.cmd = "next", .func = cmd_next, .desc = "show next N bytes."},
-      (cmd_map){.cmd = "set", .func = cmd_set, .desc = "set offset to X."},
-      (cmd_map){.cmd = "tell", .func = cmd_tell, .desc = "show current offset."}
+  static const cmdmap map[] = {
+      (cmdmap){.cmd = "open", .fn = cmd_open, .desc = "open P file."},
+      (cmdmap){.cmd = "close", .fn = cmd_close, .desc = "close file."},
+      (cmdmap){.cmd = "skip", .fn = cmd_skip, .desc = "skip N bytes."},
+      (cmdmap){.cmd = "next", .fn = cmd_next, .desc = "show next N bytes."},
+      (cmdmap){.cmd = "set", .fn = cmd_set, .desc = "set offset to X."},
+      (cmdmap){.cmd = "tell", .fn = cmd_tell, .desc = "show offset."},
+      (cmdmap){.cmd = "scan", .fn = cmd_scan, .desc = "scan for non-null data"}
       /**/
   };
 
@@ -311,7 +416,7 @@ void exec(const char *cmd, int argc, char **argv) {
   for (size_t i = 0; i < num; i++) {
     if (strcmp(map[i].cmd, cmd) == 0) {
       int opt;
-      if ((opt = map[i].func(argc, argv)))
+      if ((opt = map[i].fn(argc, argv)))
         printf("error: command %s failed (return code %i).\n", cmd, opt);
       else
         printf("info: command %s succeeded.\n", cmd);
@@ -329,7 +434,7 @@ void exec(const char *cmd, int argc, char **argv) {
 
 #define DEFAULT_CMD_RESULT -1
 int main(int margc, char **margv) {
-  char buffer[INPUT_BUFFER];
+  char buffer[1024];
   int quit = 0;
 
   while (quit == 0) {
@@ -338,7 +443,7 @@ int main(int margc, char **margv) {
 
     printf("command > ");
 
-    argv = parse_input(buffer, INPUT_BUFFER, &argc);
+    argv = parse_input(buffer, sizeof(buffer) - 1, &argc);
     if (argv == NULL || argc == 0)
       continue;
 
