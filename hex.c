@@ -13,6 +13,18 @@
 #define OK 0
 #define ERR 1
 
+typedef uint8_t chunk8K[CHUNK];
+
+typedef struct {
+  chunk8K data;
+  long off_here;
+  long off_prev;
+  long off_next;
+  long is_last;
+  FILE *filedesc;
+  long filesize;
+} ChunkIter;
+
 struct {
   long offset;
   long used;
@@ -26,8 +38,8 @@ struct {
 } program = {0};
 
 /*******************************************************************************
-                             Util functions
-********************************************************************************/
+ *                            Util functions
+ *******************************************************************************/
 
 extern int str_is_int(char *str, long *out);
 extern void byte_to_hex(char *hi, char *lo, uint8_t byte);
@@ -38,8 +50,8 @@ extern char **parse_input(char *buffer, size_t len, int *out);
 extern int bytebuf_is_zeroed(uint8_t *buffer, long size);
 
 /*******************************************************************************
-                              Error functions
- ********************************************************************************/
+ *                           Error functions
+ *******************************************************************************/
 
 extern int error_fopen(FILE *result, const char *path);
 extern int error_out_of_range(long pos, long length, long low, long high);
@@ -50,7 +62,7 @@ extern int error_not_enough_args(int got_argc, int expected_argc);
 
 /*******************************************************************************
  *                            File functions
- ********************************************************************************/
+ *******************************************************************************/
 
 int close_file(void) {
   int opt;
@@ -134,93 +146,52 @@ newfile:
                              Chunk functions
 ********************************************************************************/
 
-int update_chunk(long size) {
+int read_chunk(ChunkIter *iterator) {
   int opt;
-  if ((opt = error_no_file_loaded(program.file)))
+
+  long pos = iterator->off_here;
+  long size = iterator->off_next - iterator->off_here;
+  long filesize = iterator->filesize;
+
+  if ((opt = error_out_of_range(pos, size, 0, filesize - 1)))
     return opt;
 
-  long pos = ftell(program.file);
-  if ((opt = error_out_of_range(pos, size, 0, program.size)))
-    return opt;
-
-  if (size < 0) {
-    long new_pos = pos + size;
-    long new_size = -size;
-
-    fseek(program.file, new_pos, SEEK_SET);
-    fread(chunk.data, new_size, 1, program.file);
-    fseek(program.file, new_pos, SEEK_SET);
-    chunk.used = new_size;
-    chunk.offset = ftell(program.file);
-    return OK;
-  }
-
-  fread(chunk.data, size, 1, program.file);
-  chunk.used = size;
-  chunk.offset = pos;
+  fread(iterator->data, sizeof(uint8_t), size, iterator->filedesc);
   return OK;
 }
 
-int scan_chunk(const char *entered_path, long chunks) {
+int next_chunk(ChunkIter *iterator) {
   int opt;
-  if ((opt = error_no_file_loaded(program.file)))
+  if ((opt = error_no_file_loaded(iterator->filedesc)))
     return opt;
 
-  FILE *output;
-  if ((opt = create_file(entered_path, &output)))
+  if ((opt = read_chunk(iterator)))
     return opt;
 
-  long step;
-  long limit;
-  long chunk_count = 0;
-  int chunk_empty = 1;
-  int prev_empty = 2;
-  long pos = ftell(program.file);
+  iterator->off_prev = iterator->off_here;
+  iterator->off_here = iterator->off_next;
+  iterator->off_next += CHUNK;
 
-  chunks *= CHUNK;
-
-  if (chunks == 0)
-    limit = program.size;
-  else if ((opt = error_out_of_range(pos, chunks, 0, program.size)))
-    return opt;
-  else
-    limit = chunks;
-
-  for (long i = ftell(program.file); i < program.size; i += CHUNK) {
-    step = CHUNK;
-
-    if (i + step > program.size)
-      step = program.size - i - 1;
-
-    if ((opt = update_chunk(step)))
-      return opt;
-
-    chunk_empty = bytebuf_is_zeroed(chunk.data, chunk.used);
-    switch (prev_empty | chunk_empty) {
-    case 0b01:
-      fprintf(output, "%li chunks (%li)\n\n", chunk_count, chunk_count * CHUNK);
-      chunk_count = 0;
-      break;
-
-    case 0b10:
-      pos = ftell(program.file);
-      fprintf(output, "%li (%lX)\n", pos, pos);
-      chunk_count++;
-      break;
-
-    case 0b00:
-      chunk_count++;
-      break;
-    }
-
-    prev_empty = chunk_empty << 1;
-
-    fflush(output);
+  if (iterator->off_next > iterator->filesize) {
+    iterator->off_next = iterator->filesize - iterator->off_next - 1;
+    iterator->is_last = 1;
   }
 
-  fclose(output);
   return OK;
 }
+
+// TODO: implement
+int scan_chunk(ChunkIter *iterator, FILE *output) {
+  assert(iterator != NULL);
+
+  return OK;
+}
+
+// TODO: implement
+int scan_many_chunk(const char *entered_path, long chunks) { return OK; }
+
+// TODO: implement
+int skip_chunks(long chunks) { return OK; }
 
 /*******************************************************************************
                              Command functions
@@ -280,36 +251,45 @@ int cmd_set(int argc, char **argv) {
                              SKIP
 */
 
+// TODO reimplement
 int cmd_skip(int argc, char **argv) {
-  long size = CHUNK;
-  int opt, valid;
-
-  if (argc >= 2) {
-    if ((opt = error_invalid_arguments(argc, 2)))
-      return opt;
-
-    valid = str_is_int(argv[1], &size);
-    if ((opt = error_invalid_integer(valid, argv[1])))
-      return opt;
-  }
-
-  if (strcmp(argv[0], "next") == 0) {
-    if ((opt = error_out_of_range(0, size, -CHUNK, CHUNK)))
-      return opt;
-
-    if ((opt = update_chunk(size)))
-      return opt;
-  }
-
-  else {
-    long pos = ftell(program.file);
-
-    if ((opt = error_out_of_range(pos, size, 0, program.size)))
-      return opt;
-
-    if ((opt = file_at(pos + size)))
-      return opt;
-  }
+  // long size = CHUNK;
+  // int opt, valid;
+  //
+  // if (argc >= 2) {
+  //   if ((opt = error_invalid_arguments(argc, 2)))
+  //     return opt;
+  //
+  //   valid = str_is_int(argv[1], &size);
+  //   if ((opt = error_invalid_integer(valid, argv[1])))
+  //     return opt;
+  // }
+  //
+  // if (strcmp(argv[0], "next") == 0) {
+  //   if ((opt = error_out_of_range(0, size, -CHUNK, CHUNK)))
+  //     return opt;
+  //
+  //   if ((opt = next_chunk(size)))
+  //     return opt;
+  // }
+  //
+  // else if (strcmp(argv[0], "prev") == 0) {
+  //   if ((opt = error_out_of_range(0, size, -CHUNK, CHUNK)))
+  //     return opt;
+  //
+  //   if ((opt = next_chunk(-size)))
+  //     return opt;
+  // }
+  //
+  // else {
+  //   long pos = ftell(program.file);
+  //
+  //   if ((opt = error_out_of_range(pos, size, 0, program.size)))
+  //     return opt;
+  //
+  //   if ((opt = file_at(pos + size)))
+  //     return opt;
+  // }
 
   return OK;
 }
@@ -319,6 +299,20 @@ int cmd_skip(int argc, char **argv) {
 */
 
 int cmd_next(int argc, char **argv) {
+  int opt;
+
+  if ((opt = cmd_skip(argc, argv)))
+    return opt;
+
+  bytebuf_hexview(chunk.data, chunk.used, chunk.offset);
+  return OK;
+}
+
+/*******************************************************************************
+ *                            PREV
+ */
+
+int cmd_prev(int argc, char **argv) {
   int opt;
 
   if ((opt = cmd_skip(argc, argv)))
@@ -358,7 +352,7 @@ int cmd_scan_next(int argc, char **argv) {
   if ((opt = error_invalid_integer(valid, argv[1])))
     return opt;
 
-  return scan_chunk(argv[2], size);
+  return scan_many_chunk(argv[2], size);
 }
 
 /*******************************************************************************
@@ -375,7 +369,7 @@ int cmd_scan(int argc, char **args) {
     return opt;
 
   fseek(program.file, 0, SEEK_SET);
-  return scan_chunk(args[1], 0);
+  return scan_many_chunk(args[1], 0);
 }
 
 /*******************************************************************************

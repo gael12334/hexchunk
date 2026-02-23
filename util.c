@@ -39,23 +39,22 @@ int bytebuf_is_zeroed(pubyte buffer, long size);
 
 int str_is_int(pschr str, rslong out) {
   int valid = 1;
-  int minus = 0;
+  int minus = 1;
   int digit = 0;
   int check = 0;
 
-  if (*str == '-')
+  if (*str == '-') {
+    minus = -1;
     str++;
+  }
 
   for (rschr pchr = str; *pchr != '\0' && valid == 1; pchr++) {
     valid &= isdigit(*pchr) ? 1 : 0;
   }
 
   if (valid) {
-    *out = strtol(str, NULL, 10);
-
-    if (minus) {
-      *out *= -1;
-    }
+    long value = strtol(str, NULL, 10);
+    *out = minus * value;
   }
 
   return valid;
