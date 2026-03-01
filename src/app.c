@@ -20,51 +20,64 @@
     return ae;                                                                 \
   }
 
+#define check_closed(a, clean)                                                 \
+  if (a->closed != ae_opened) {                                                \
+    clean;                                                                     \
+    return ae_closed;                                                          \
+  }
+
 /*******************************************************************************
  *                            Functions
  *******************************************************************************/
-ae_t a_init(app_t *out, cstr name, av_t *version, ac_t *list, size_t num) {
+
+ae_t a_init(app_t *out, ap_t *params) {
   assert(out != NULL);
-  assert(name != NULL);
-  assert(version != NULL);
-  assert(list != NULL);
+  assert(params != NULL);
+  assert(params->commands != NULL);
 
-  out->closed = ae_closed;
-  out->version = *version;
-  out->num = num;
+  out->closed = ae_opened;
+  out->version = params->version;
+  out->cmdnum = params->cmdnum;
 
-  out->list = malloc(sizeof(ac_t) * num);
-  assert(out->list != NULL);
-  for (ac_t *ac = list, *end = list + num; ac != end; ac++) {
-    check_null(ac->delegate, { free(out->list); });
-    check_null(ac->name, { free(out->list); });
-    out->list[ac - list] = *ac;
+  out->cmdbuf = malloc(sizeof(ac_t) * params->cmdnum);
+  assert(out->cmdbuf != NULL);
+
+  ac_t *end = params->commands + params->cmdnum;
+  ac_t *list = params->commands;
+
+  for (ac_t *ac = list; ac != end; ac++) {
+    check_null(ac->delegate, { free(out->cmdbuf); });
+    check_null(ac->name, { free(out->cmdbuf); });
+    out->cmdbuf[ac - list] = *ac;
   }
 
+  out->istream = stdin;
+  out->argalloc = 0;
+  out->argbuf = NULL;
   memset(out->input, 0, sizeof(out->input));
-
-  strncpy(out->name, name, sizeof(out->name));
-  out->namelen = strnlen(out->name, sizeof(out->namelen - 2));
-  out->name[out->namelen - 1] = '\0';
-
+  strncpy(out->name, params->name, sizeof(out->name));
   return ae_ok;
 }
 
 ae_t a_deinit(app_t *a) {
   assert(a != NULL);
-  assert(a->list != NULL);
-  free(a->list);
+  assert(a->cmdbuf != NULL);
+  free(a->cmdbuf);
+  if (a->argbuf) {
+    free(a->argbuf);
+  }
   memset(a, 0, sizeof(*a));
   return ae_ok;
 }
 
-ae_t a_dispatch(app_t *a, cstr name, ac_t *list, size_t num, aa_t *args) {
+ae_t a_dispatch(app_t *a, cstr name, ac_t *cmds, size_t cmdnum, aa_t *args) {
   assert(a != NULL);
-  assert(list != NULL);
+  assert(cmds != NULL);
   assert(args != NULL);
-  for (ac_t *ac = list, *end = list + num; ac != end; ac++) {
-    if (strncmp(name, list->name, sizeof(a->input)) == 0) {
-      return list->delegate(a, args);
+  for (ac_t *ac = cmds, *end = cmds + cmdnum; ac != end; ac++) {
+    if (strncmp(name, ac->name, sizeof(a->input)) == 0) {
+      a->result = ac->delegate(a, args);
+      return ae_ok;
     }
   }
 
@@ -72,52 +85,38 @@ ae_t a_dispatch(app_t *a, cstr name, ac_t *list, size_t num, aa_t *args) {
   return ae_unknown;
 }
 
-ae_t a_run(app_t *a) {
+ae_t a_prompt(app_t *a, aa_t *out) {
   assert(a != NULL);
-  assert(a->list != NULL);
-  assert(a->name != NULL);
-  assert(a->closed == ae_closed);
+  assert(out != NULL);
+  assert(a->istream != NULL);
+  check_closed(a, {});
 
-  aa_t args = {.argc = 0, .argv = NULL};
-  str *toklist = NULL;
-  str token = NULL;
-  size_t alloc = 0;
+  printf("%s > ", a->name);
+  fgets(a->input, sizeof(a->input) - 1, a->istream);
+  size_t newline = strcspn(a->input, "\n\r");
+  a->input[newline] = '\0';
+
   size_t num = 0;
-
-  a->closed = ae_open;
-  while (a->closed == ae_open) {
-    fwrite(a->name, a->namelen, 1, stdout);
-    putc('>', stdout);
-    fgets(a->input, sizeof(a->input) - 1, stdin);
-    a->input[strcspn(a->input, "\n\r")] = '\0';
-
-    num = 0;
-    token = strtok(a->input, " ");
-    while (token != NULL) {
-      if (num == alloc) {
-        alloc = (alloc + 1) * 2;
-        toklist = realloc(toklist, sizeof(*toklist) * alloc);
-        assert(toklist != NULL);
-      }
-
-      toklist[num] = token;
-      token = strtok(NULL, " ");
-      num++;
+  str token = strtok(a->input, " ");
+  while (token != NULL) {
+    if (num >= a->argalloc) {
+      a->argalloc++;
+      a->argalloc *= 2;
+      a->argbuf = realloc(a->argbuf, a->argalloc);
+      assert(a->argbuf != NULL);
     }
 
-    args.argv = toklist;
-    args.argc = num;
-
-    if (num > 0) {
-      ae_t err = a_dispatch(a, toklist[0], a->list, a->num, &args);
-      check_ae(err, { free(toklist); });
-    }
+    a->argbuf[num] = token;
+    token = strtok(NULL, " ");
+    num++;
   }
 
-  if (toklist == NULL) {
-    free(toklist);
-  }
+  out->argv = a->argbuf;
+  out->argc = num;
   return ae_ok;
 }
 
-ae_t a_closed(app_t *a) { return ae_ok; }
+ae_t a_closed(app_t *a) {
+  assert(a != NULL);
+  return a->closed;
+}
