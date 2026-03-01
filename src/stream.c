@@ -5,6 +5,7 @@
 #include "stream.h"
 
 #define check_errno(error, clean)                                              \
+  errno = 0;                                                                   \
   if (errno) {                                                                 \
     clean;                                                                     \
     return error;                                                              \

@@ -4,13 +4,14 @@
 
 #include "path.h"
 
-#define check_length(length, cleanup)                                          \
-  if (length > PATH_MAX) {                                                     \
+#define check_size(size, cleanup)                                              \
+  if (size > PATH_MAX) {                                                       \
     cleanup;                                                                   \
     return pe_long;                                                            \
   }
 
 #define check_errno(error, clean)                                              \
+  errno = 0;                                                                   \
   if (errno) {                                                                 \
     clean;                                                                     \
     return error;                                                              \
@@ -26,20 +27,31 @@
  *                            Path functions
  *******************************************************************************/
 
-pe_t p_init(path_t *out, cstr path, size_t length) {
+pe_t p_init(path_t *out, ps_t *chars) {
   assert(out != NULL);
-  assert(path != NULL);
-  check_length(length, {});
+  assert(chars != NULL);
+  assert(chars->chars != NULL);
+  check_size(chars->size, {});
 
-  realpath(path, out->path);
+  realpath(chars->chars, out->path);
   check_errno(pe_stdlib, {});
-  out->length = strnlen(out->path, sizeof(out->path));
+
+  size_t length = chars->size - 1;
+  size_t depth = 0;
+  if (strcmp("/", out->path) == 0) {
+    out->length = length;
+    out->depth = depth;
+    return pe_ok;
+  }
 
   char *delim = out->path;
   while ((delim = strchr(delim, '/')) != NULL) {
-    out->depth++;
+    delim++;
+    depth++;
   }
 
+  out->length = length;
+  out->depth = depth;
   return pe_ok;
 }
 
@@ -55,7 +67,7 @@ pe_t p_typeof(path_t *path, po_t *out) {
   struct stat objstats;
   stat(path->path, &objstats);
   check_errno(pe_sysstat, {});
-  *out = objstats.st_mode;
+  *out = objstats.st_mode & S_IFMT;
   return pe_ok;
 }
 
@@ -84,44 +96,40 @@ pe_t p_parent(path_t *path, path_t *out) {
   assert(path != NULL);
   assert(out != NULL);
 
-  pe_t err = p_init(out, path->path, path->length);
-  check_pe(err, {});
-
-  char *delim = strrchr(out->path, '/');
-  if (delim == out->path)
+  if (path->depth == 0) {
     return pe_root;
+  }
 
-  *delim = '\0';
-  out->depth--;
-  out->length = delim - &out->path[0];
-  return pe_ok;
+  else if (path->depth == 1) {
+    ps_t root = p_literal("/");
+    return p_init(out, &root);
+  }
+
+  for (size_t i = path->length + 1; i > 0; i--) {
+    if (path->path[i] == '/') {
+      path->path[i] = '\0';
+      ps_t parent = {.chars = path->path, .size = i + 1};
+      pe_t error = p_init(out, &parent);
+      path->path[i] = '/';
+      return error;
+    }
+  }
+
+  return pe_inv;
 }
 
-pe_t p_child(path_t *path, path_t *out, cstr name, size_t size) {
+pe_t p_child(path_t *path, path_t *out, ps_t *chars) {
   assert(path != NULL);
   assert(out != NULL);
-  assert(name != NULL);
+  assert(chars != NULL);
+  assert(chars->chars != NULL);
+  check_size(chars->size, {});
 
-  char temp[PATH_MAX];
-  if (path->length + size + 1 > PATH_MAX - 1)
-    return pe_long;
-
-  size_t i = 0;
-  while (i < path->length) {
-    temp[i] = path->path[i];
-    i++;
-  }
-
-  temp[i++] = '/';
-
-  size_t end = i + size;
-  while (i < end) {
-    temp[i] = name[i];
-    i++;
-  }
-
-  temp[i] = '\0';
-
-  pe_t err = p_init(out, temp, i);
-  return err;
+  char temp[PATH_MAX] = {0};
+  strncpy(temp, path->path, PATH_MAX - 1);
+  strncat(temp, "/", PATH_MAX - 1);
+  strncat(temp, chars->chars, PATH_MAX - 1);
+  ps_t child = p_decayed(temp);
+  pe_t error = p_init(out, &child);
+  return error;
 }

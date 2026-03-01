@@ -3,6 +3,7 @@
  */
 
 #pragma once
+#include <stdio.h>
 
 #define t_exp(expf, exp, gotf, got, clean)                                     \
   if (exp != got) {                                                            \

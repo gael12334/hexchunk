@@ -22,7 +22,15 @@
  * Path error codes
  */
 
-typedef enum { pe_ok, pe_long, pe_stdlib, pe_sysstat, pe_root, pe_end } pe_t;
+typedef enum {
+  pe_ok,
+  pe_long,
+  pe_stdlib,
+  pe_sysstat,
+  pe_root,
+  pe_end,
+  pe_inv
+} pe_t;
 
 /*
  * Path's pointed object type (from <sys/stat.h>)
@@ -36,6 +44,19 @@ typedef enum {
   po_fifo = S_IFIFO,
   po_socket = S_IFSOCK
 } po_t;
+
+/*
+ * String wrapper
+ */
+typedef struct {
+  cstr chars;
+  size_t size;
+} ps_t;
+
+#define p_literal(s)                                                           \
+  (ps_t) { .chars = s, .size = sizeof(s) }
+#define p_decayed(p)                                                           \
+  (ps_t) { .chars = p, .size = strnlen(p, PATH_MAX) + 1 }
 
 /*
  * Path object
@@ -53,7 +74,7 @@ typedef struct {
 /*
  * Init instance of path
  */
-pe_t p_init(path_t *out, cstr path, size_t length);
+pe_t p_init(path_t *out, ps_t *chars);
 
 /*
  * Deinit instance of path
@@ -88,7 +109,7 @@ pe_t p_parent(path_t *path, path_t *out);
 /*
  * Path of one of the pointed object's children
  */
-pe_t p_child(path_t *path, path_t *out, cstr name, size_t size);
+pe_t p_child(path_t *path, path_t *out, ps_t *chars);
 
 /*
  * Tell if path points to root directory
