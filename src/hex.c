@@ -243,6 +243,51 @@ int h_quit(app_t *app, ha_t *args) {
   return he_ok;
 }
 
-int h_find(app_t *app, ha_t *args);
+int h_find(app_t *app, ha_t *args) {
+  assert(app != NULL);
+  assert(args != NULL);
+
+  hexapp_t *ha = (hexapp_t *)app;
+  int err;
+
+  check_args(args->argc, 3, { puts("Expected 3 arguments."); });
+  check_occupied(ha->hex.state, { puts("Stream is unused."); });
+
+  long position;
+  err = s_pos(&ha->hex.stream, &position);
+  check_he(err, { printf("Unable to get stream pos; error code %i\n", err); });
+
+  long size;
+  err = s_pos(&ha->hex.stream, &size);
+  check_he(err, { printf("Unable to get stream size; error code %i\n", err); });
+
+  // 1st arg : pattern
+  str pattern = args->argv[1];
+
+  // 2nd arg : range
+  long range;
+  err = a_arg2long(args->argv[2], &range);
+  check_he(err, { printf("Failed to parse range; error code %i.\n", err); });
+
+  if (position + range > size || range <= 0) {
+    range = size - position;
+  }
+
+  long which = -1;
+  sb_t memory = {.data = pattern, .size = strlen(pattern)};
+  stream_t stream = {0};
+  err = s_openmem(&stream, &memory, sm_binary_read);
+  check_he(err, { printf("Stream of pattern failed; error code: %i\n", err); });
+
+  err = s_seek(&ha->hex.stream, &stream, 1, &which);
+  s_close(&stream);
+  check_he(err, { printf("Seek failed; error code: %i\n", err); });
+
+  err = s_pos(&ha->hex.stream, &position);
+  check_he(err, { printf("Unable to get stream pos; error code %i\n", err); });
+
+  printf("Found pattern at offset %li.\n", position - memory.size);
+  return he_ok;
+}
 
 int h_findimg(app_t *app, ha_t *args);

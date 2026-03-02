@@ -36,7 +36,7 @@ hexapp_t h_util_create_app_open_file(ad_t fn) {
   int err;
 
   app = h_util_create_app(fn);
-  ps = p_literal("dump.elf");
+  ps = p_literal("dump.sample");
   err = s_openfile(&app.hex.stream, ps.chars, sm_binary_read);
   assert(err == se_ok);
   p_init(&app.hex.path, &ps);
@@ -174,6 +174,22 @@ void h_test_view_failed(void) {
   t_ok();
 }
 
+void h_test_find(void) {
+  // arrange
+  hexapp_t app = h_util_create_app_open_file(h_find);
+  str args[] = {"test", "ELF", "200"};
+  aa_t aa = {.argc = 3, .argv = args};
+
+  // act
+  int err = a_dispatch(&app.app, "test", app.app.cmdbuf, app.app.cmdnum, &aa);
+
+  // assert
+  int result = app.app.result;
+  h_util_destroy_app(&app);
+  t_exp("%i", he_ok, "%i", result, {});
+  t_ok();
+}
+
 int main() {
   h_test_open();
   h_test_open_failed();
@@ -182,5 +198,6 @@ int main() {
   h_test_move_somehow_works();
   h_test_view();
   h_test_view_failed();
+  h_test_find();
   return 0;
 }
