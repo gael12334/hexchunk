@@ -72,6 +72,11 @@ static long s_canwrite(sm_t mode) {
   return (!readmode && !rbinmode);
 }
 
+static void s_stream_cleanup(stream_t *s) {
+  fclose(s->handle);
+  memset(s, 0, sizeof(*s));
+}
+
 static se_t s_stream(stream_t *out, FILE *handle, st_t type, sm_t mode) {
   out->handle = handle;
   out->mode = mode;
@@ -87,7 +92,7 @@ static se_t s_stream(stream_t *out, FILE *handle, st_t type, sm_t mode) {
   switch (out->mode & 0x000000FF) {
   case sm_append:
     out->size = ftell(out->handle);
-    check_errno(se_stdio, {});
+    check_errno(se_stdio, { s_stream_cleanup(out); });
     break;
 
   case sm_write:
@@ -96,15 +101,16 @@ static se_t s_stream(stream_t *out, FILE *handle, st_t type, sm_t mode) {
 
   case sm_read:
     fseek(out->handle, 0, SEEK_END);
-    check_errno(se_stdio, {});
+    check_errno(se_stdio, { s_stream_cleanup(out); });
 
     out->size = ftell(out->handle);
-    check_errno(se_stdio, {});
+    check_errno(se_stdio, { s_stream_cleanup(out); });
 
     rewind(out->handle);
     break;
 
   default:
+    s_stream_cleanup(out);
     return se_mode;
   }
 
@@ -124,7 +130,9 @@ se_t s_openfile(stream_t *out, cstr path, sm_t mode) {
 
   st_t type = st_file;
   FILE *handle = fopen(path, (const char *)&mode);
-  check_errno(se_stdio, {});
+  check_null(handle, { memset(out, 0, sizeof(*out)); });
+  check_errno(se_stdio, { memset(out, 0, sizeof(*out)); });
+
   return s_stream(out, handle, type, mode);
 }
 
@@ -135,7 +143,8 @@ se_t s_openmem(stream_t *out, sb_t *mem, sm_t mode) {
 
   st_t type = st_memory;
   FILE *handle = fmemopen(mem->data, mem->size, (cstr)&mode);
-  check_errno(se_stdio, {});
+  check_null(handle, { memset(out, 0, sizeof(*out)); });
+  check_errno(se_stdio, { memset(out, 0, sizeof(*out)); });
   return s_stream(out, handle, type, mode);
 }
 

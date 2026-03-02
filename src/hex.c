@@ -28,21 +28,54 @@
     return he;                                                                 \
   }
 
+#define check_read(read, exp, clean)                                           \
+  if (read != exp) {                                                           \
+    clean;                                                                     \
+    return he_read;                                                            \
+  }
+
 /*******************************************************************************
  *                            Internal functions
  *******************************************************************************/
 
-#define h_linewd 16
-#define h_addrsz 16
-#define h_hexbsz (3 * h_linewd)
-#define h_ascisz (1 * h_linewd)
-#define h_spacsz 1
-#define h_linesz h_addrsz + h_spacsz + h_hexbsz + h_spacsz + h_ascisz + 2
+static void h_readrow(stream_t *s, long *len, hr_t *out, long off, long size) {
+  static const int8_t hexchars[] = {'0', '1', '2', '3', '4', '5', '6', '7',
+                                    '8', '9', 'A', 'B', 'C', 'D', 'E', 'F'};
+  int8_t *pch;
+  long read = 0;
+  int err = 0;
+  int quad = 0;
+
+  *len = 0;
+  out->zero = 0;
+  out->zero1 = 0;
+  for (size_t i = 0; i < sizeof(out->ascii); i++) {
+    pch = &out->ascii[i];
+    err = s_readbyte(s, pch, &read);
+
+    if (err == 0 && read == 1 && off + i < size) {
+      int low = *pch & 0x0F;
+      int high = (*pch & 0xF0) >> 4;
+      out->hex[i][0] = hexchars[high];
+      out->hex[i][1] = hexchars[low];
+      (*pch) = ((*pch) < 0x20 || (*pch) > 0x7E) ? '.' : *pch;
+      (*len)++;
+    }
+
+    else {
+      out->hex[i][0] = ' ';
+      out->hex[i][1] = ' ';
+      *pch = ' ';
+    }
+
+    quad++;
+    out->hex[i][2] = (quad == 4) ? '|' : ' ';
+    quad *= (quad != 4);
+  }
+  return;
+}
 
 static int h_showhex(stream_t *stream, long size) {
-  static char line[h_linesz];
-  static cstr xfmt[2] = {"%02hhX ", "%-3c"};
-  int a = 0;
   int err;
 
   // offset
@@ -51,25 +84,26 @@ static int h_showhex(stream_t *stream, long size) {
   check_he(err, { printf("Failed to get stream pos; error code %i\n", err); });
 
   // header
-  a = sprintf(line, "%-16s", "offset");
-  a += sprintf(line + a, " ");
-  for (size_t i = 0; i < h_linewd; i++) {
-    a += sprintf(line + a, "%02zx-", i);
-  }
-  a += sprintf(line + a, " ");
-  a += sprintf(line + a, "%-16s", "ascii");
-  printf("%s\n", line);
-
-  // size
-  long stream_size;
-  err = s_length(stream, &stream_size);
-  check_he(err, { printf("Failed to get stream size; error code %i\n", err); });
+  const char space[] = ".....offset.....";
+  const char hxdcm[] = ".0..1..2..3|.4..5..6..7|.8..9..A..B|.C..D..E..F|";
+  const char ascii[] = "0123456789ABCDEF";
+  printf("%s|%s%s\n", space, hxdcm, ascii);
 
   // row
-  for (long r = 0; s_consumed(stream) != se_consumed; r += h_linewd) {
-    // TODO
-    // render bytes into hex
-    printf("%s\n", line);
+  hr_t row = {0};
+  long length = 16;
+  long start = offset;
+
+  while (length == 16 && offset - start < size) {
+    h_readrow(stream, &length, &row, offset, size);
+    printf("%016lx|%s%s\n", offset, row.allhex, row.ascii);
+    offset += length;
+
+    // Length can be less than 16 if `size` is reached
+    //
+    // if (length != 16) {
+    //   printf("Warning: read %li bytes\n", length);
+    // }
   }
 
   return he_ok;
@@ -78,6 +112,36 @@ static int h_showhex(stream_t *stream, long size) {
 /*******************************************************************************
  *                            Hex functions
  *******************************************************************************/
+
+int h_init(hexapp_t *app) {
+  assert(app != NULL);
+
+  ac_t commands[] = {a_command("open", "open a file", h_open),
+                     a_command("close", "close loaded file", h_close),
+                     a_command("move", "move stream position", h_move),
+                     a_command("view", "view stream bytes", h_view),
+                     a_command("quit", "close loaded file & quit", h_quit),
+                     a_command("help", "The help menu", a_help)};
+
+  ap_t ap = {
+      .commands = commands,
+      .cmdnum = sizeof(commands) / sizeof(commands[0]),
+      .name = "hexchunk",
+      .version = a_version(1, 0, 0),
+  };
+
+  a_init(&app->app, &ap);
+  app->hex.state = hs_ready;
+  return he_ok;
+}
+
+void h_deinit(hexapp_t *app) {
+  str args[1];
+  aa_t aa = a_args(1, args);
+  s_close(&app->hex.stream);
+  a_deinit(&app->app);
+  memset(app, 0, sizeof(*app));
+}
 
 int h_open(app_t *app, ha_t *args) {
   assert(app != NULL);
@@ -113,11 +177,11 @@ int h_close(app_t *app, ha_t *args) {
   check_he(err, { printf("Failed to close file; error code %i.\n", err); });
 
   char *path;
-  err = p_string(&ha->hex.path, &path);
-  check_he(err, { printf("Path data unreachable; error code %i.\n", err); });
+  p_string(&ha->hex.path, &path);
 
   ha->hex.state = hs_ready;
-  printf("File '%s' successfully closed.\n", path);
+  printf("Successfully closed %s.\n", path);
+  memset(&ha->hex, 0, sizeof(ha->hex));
   return he_ok;
 }
 
@@ -155,7 +219,7 @@ int h_view(app_t *app, ha_t *args) {
 
   if (size < 0) {
     puts("Size must be positive.");
-    return ae_size;
+    return he_size;
   }
 
   if (size > 4096) {
@@ -172,7 +236,12 @@ int h_unmark(app_t *app, ha_t *args);
 
 int h_atmark(app_t *app, ha_t *args);
 
-int h_quit(app_t *app, ha_t *args);
+int h_quit(app_t *app, ha_t *args) {
+  assert(app != NULL);
+  assert(args != NULL);
+  app->closed = ae_closed;
+  return he_ok;
+}
 
 int h_find(app_t *app, ha_t *args);
 

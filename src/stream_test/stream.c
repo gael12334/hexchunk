@@ -48,6 +48,13 @@ stream_t s_util_open_RF(void) {
   return s_util_init_stream(file, size, sm_read, st_file);
 }
 
+stream_t s_util_open_RF_failed(void) {
+  FILE *file = fopen("missing-file.txt", "r");
+  assert(file != NULL);
+  long size = s_util_file_size(file);
+  return s_util_init_stream(file, size, sm_read, st_file);
+}
+
 stream_t s_util_open_AF(void) {
   FILE *file = fopen(s_path, "a");
   assert(file != NULL);
@@ -124,6 +131,21 @@ void s_test_openfile_read(void) {
   t_ok();
 
   fclose(stream.handle);
+}
+
+void s_test_openfile_read_fail(void) {
+  // arrange
+  s_util_create_file();
+  const long size = sizeof(s_data);
+  stream_t stream;
+  se_t error;
+
+  // act
+  error = s_openfile(&stream, "elephant.txt", sm_read);
+
+  // assert
+  t_exp("%i", se_null, "%i", error, {});
+  t_ok();
 }
 
 void s_test_openfile_writeplus(void) {
@@ -474,6 +496,7 @@ void s_test_seek(void) {
 int main(int argc, char **argv) {
   s_test_openfile_write();
   s_test_openfile_read();
+  s_test_openfile_read_fail();
   s_test_openfile_writeplus();
   s_test_openmem();
   s_test_close();

@@ -141,3 +141,15 @@ ae_t a_arg2long(cstr arg, long *out) {
   else
     return ae_ok;
 }
+
+int a_help(struct app *a, aa_t *args) {
+  assert(a != NULL);
+  assert(args != NULL);
+
+  printf("%s\n", a->name);
+  for (size_t i = 0; i < a->cmdnum; i++) {
+    printf("%s: %s\n", a->cmdbuf[i].name, a->cmdbuf[i].description);
+  }
+
+  return ae_ok;
+}

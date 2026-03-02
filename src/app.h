@@ -137,3 +137,9 @@ ae_t a_closed(app_t *a);
  * Parse an integer
  */
 ae_t a_arg2long(cstr arg, long *out);
+
+/*
+ * Default 'help' command
+ */
+
+int a_help(struct app *a, aa_t *args);

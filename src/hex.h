@@ -16,14 +16,42 @@
 typedef aa_t ha_t;
 
 /*
+ * 16 bytes string for a row of 16 consecutive bytes
+ */
+typedef int8_t h16_t[16];
+
+/*
+ * 3 bytes string for 1 hex formatted byte
+ */
+typedef int8_t h3_t[3];
+
+/*
+ * 42 bytes string for 16 consecutive hex formatted bytes.
+ */
+typedef int8_t h42_t[16 * 3];
+
+/*
  * Hex error codes
  */
-typedef enum { he_ok, he_argc, he_state, he_number } he_t;
+typedef enum { he_ok, he_argc, he_state, he_number, he_read, he_size } he_t;
 
 /*
  * Hex program states
  */
 typedef enum { hs_ready, hs_occupied } hs_t;
+
+/*
+ * Hex byte row
+ */
+typedef struct {
+  h16_t ascii;
+  int64_t zero;
+  union {
+    h3_t hex[16];
+    h42_t allhex;
+  };
+  int64_t zero1;
+} hr_t;
 
 /*
  * Hex object
@@ -45,6 +73,16 @@ typedef struct {
 /*******************************************************************************
  *                              Hex functions
  *******************************************************************************/
+
+/*
+ * Initialize app
+ */
+int h_init(hexapp_t *app);
+
+/*
+ * Deinit app
+ */
+void h_deinit(hexapp_t *app);
 
 /*
  * Open file
