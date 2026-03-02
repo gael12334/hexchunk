@@ -14,9 +14,7 @@ int main(int argc, char **argv) {
     if (err)
       return err;
 
-    err = a_dispatch(&app.app, aa.argv[0], app.app.cmdbuf, app.app.cmdnum, &aa);
-    if (err)
-      return err;
+    a_dispatch(&app.app, aa.argv[0], app.app.cmdbuf, app.app.cmdnum, &aa);
   }
 
   h_deinit(&app);

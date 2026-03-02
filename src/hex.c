@@ -121,6 +121,7 @@ int h_init(hexapp_t *app) {
                      a_command("move", "move stream position", h_move),
                      a_command("view", "view stream bytes", h_view),
                      a_command("quit", "close loaded file & quit", h_quit),
+                     a_command("find", "find a pattern in file", h_find),
                      a_command("help", "The help menu", a_help)};
 
   ap_t ap = {

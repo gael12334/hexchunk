@@ -121,7 +121,7 @@ ae_t a_deinit(app_t *a);
 /*
  * Dispatch command
  */
-ae_t a_dispatch(app_t *a, cstr name, ac_t *list, size_t num, aa_t *args);
+void a_dispatch(app_t *a, cstr name, ac_t *list, size_t num, aa_t *args);
 
 /*
  * Prompt user input

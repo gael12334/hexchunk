@@ -61,13 +61,14 @@ void h_test_open(void) {
   aa_t aa = {.argc = 2, .argv = args};
 
   // act
-  int err = a_dispatch(&app.app, "test", app.app.cmdbuf, app.app.cmdnum, &aa);
+  a_dispatch(&app.app, "test", app.app.cmdbuf, app.app.cmdnum, &aa);
 
   // assert
   hs_t state = app.hex.state;
+  int result = app.app.result;
   h_util_destroy_app(&app);
 
-  t_exp("%i", he_ok, "%i", err, {});
+  t_exp("%i", he_ok, "%i", result, {});
   t_exp("%i", hs_occupied, "%i", state, {});
   t_ok();
 }
@@ -79,7 +80,7 @@ void h_test_open_failed(void) {
   aa_t aa = {.argc = 2, .argv = args};
 
   // act
-  int err = a_dispatch(&app.app, "test", app.app.cmdbuf, app.app.cmdnum, &aa);
+  a_dispatch(&app.app, "test", app.app.cmdbuf, app.app.cmdnum, &aa);
 
   // assert
   int result = app.app.result;
@@ -96,7 +97,7 @@ void h_test_close(void) {
   aa_t aa = {.argc = 1, .argv = args};
 
   // act
-  int err = a_dispatch(&app.app, "test", app.app.cmdbuf, app.app.cmdnum, &aa);
+  a_dispatch(&app.app, "test", app.app.cmdbuf, app.app.cmdnum, &aa);
 
   // assert
   int result = app.app.result;
@@ -113,7 +114,7 @@ void h_test_move(void) {
   aa_t aa = {.argc = 2, .argv = args};
 
   // act
-  int err = a_dispatch(&app.app, "test", app.app.cmdbuf, app.app.cmdnum, &aa);
+  a_dispatch(&app.app, "test", app.app.cmdbuf, app.app.cmdnum, &aa);
 
   // assert
   int result = app.app.result;
@@ -131,7 +132,7 @@ void h_test_move_somehow_works(void) {
   aa_t aa = {.argc = 2, .argv = args};
 
   // act
-  int err = a_dispatch(&app.app, "test", app.app.cmdbuf, app.app.cmdnum, &aa);
+  a_dispatch(&app.app, "test", app.app.cmdbuf, app.app.cmdnum, &aa);
 
   // assert
   int result = app.app.result;
@@ -149,7 +150,7 @@ void h_test_view(void) {
   aa_t aa = {.argc = 2, .argv = args};
 
   // act
-  int err = a_dispatch(&app.app, "test", app.app.cmdbuf, app.app.cmdnum, &aa);
+  a_dispatch(&app.app, "test", app.app.cmdbuf, app.app.cmdnum, &aa);
 
   // assert
   int result = app.app.result;
@@ -165,7 +166,7 @@ void h_test_view_failed(void) {
   aa_t aa = {.argc = 2, .argv = args};
 
   // act
-  int err = a_dispatch(&app.app, "test", app.app.cmdbuf, app.app.cmdnum, &aa);
+  a_dispatch(&app.app, "test", app.app.cmdbuf, app.app.cmdnum, &aa);
 
   // assert
   int result = app.app.result;
@@ -181,7 +182,7 @@ void h_test_find(void) {
   aa_t aa = {.argc = 3, .argv = args};
 
   // act
-  int err = a_dispatch(&app.app, "test", app.app.cmdbuf, app.app.cmdnum, &aa);
+  a_dispatch(&app.app, "test", app.app.cmdbuf, app.app.cmdnum, &aa);
 
   // assert
   int result = app.app.result;

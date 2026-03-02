@@ -70,19 +70,18 @@ ae_t a_deinit(app_t *a) {
   return ae_ok;
 }
 
-ae_t a_dispatch(app_t *a, cstr name, ac_t *cmds, size_t cmdnum, aa_t *args) {
+void a_dispatch(app_t *a, cstr name, ac_t *cmds, size_t cmdnum, aa_t *args) {
   assert(a != NULL);
   assert(cmds != NULL);
   assert(args != NULL);
   for (ac_t *ac = cmds, *end = cmds + cmdnum; ac != end; ac++) {
     if (strncmp(name, ac->name, sizeof(a->input)) == 0) {
       a->result = ac->delegate(a, args);
-      return ae_ok;
+      return;
     }
   }
 
-  puts("Error: '%s' unknown command");
-  return ae_unknown;
+  printf("Error: '%s' unknown command\n", name);
 }
 
 ae_t a_prompt(app_t *a, aa_t *out) {
