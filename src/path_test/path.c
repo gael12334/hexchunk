@@ -78,6 +78,21 @@ void p_test_parent(void) {
   t_ok();
 }
 
+void p_test_parent_root(void) {
+  // arrange
+  path_t r = {0};
+  path_t path;
+  ps_t ps = p_literal("/");
+  p_init(&path, &ps);
+
+  // act
+  pe_t error = p_parent(&path, &r);
+
+  // assert
+  t_exp("%i", pe_root, "%i", error, {});
+  t_ok();
+}
+
 void p_test_child(void) {
   // arrange
   p_util_create_tmpfile();
@@ -102,6 +117,7 @@ int main(int argc, char **argv) {
   p_test_init();
   p_test_typeof();
   p_test_parent();
+  p_test_parent_root();
   p_test_child();
   return 0;
 }

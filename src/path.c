@@ -38,7 +38,7 @@ pe_t p_init(path_t *out, ps_t *chars) {
 
   size_t length = chars->size - 1;
   size_t depth = 0;
-  if (strcmp("/", out->path) == 0) {
+  if (p_isroot(out) == pe_root) {
     out->length = length;
     out->depth = depth;
     return pe_ok;
@@ -132,4 +132,9 @@ pe_t p_child(path_t *path, path_t *out, ps_t *chars) {
   ps_t child = p_decayed(temp);
   pe_t error = p_init(out, &child);
   return error;
+}
+
+pe_t p_isroot(path_t *path) {
+  assert(path != NULL);
+  return (strncmp(path->path, "/", PATH_MAX) == 0) ? pe_root : pe_ok;
 }

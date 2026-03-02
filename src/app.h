@@ -30,7 +30,17 @@ typedef int (*ad_t)(struct app *a, aa_t *args);
 /*
  * App error codes
  */
-typedef enum { ae_ok, ae_err, ae_closed, ae_opened, ae_null, ae_unknown } ae_t;
+typedef enum {
+  ae_ok,
+  ae_err,
+  ae_closed,
+  ae_opened,
+  ae_null,
+  ae_unknown,
+  ae_number,
+  ae_stdlib,
+  ae_size,
+} ae_t;
 
 /*
  * App command object
@@ -122,3 +132,8 @@ ae_t a_prompt(app_t *a, aa_t *out);
  * Check if app is closed
  */
 ae_t a_closed(app_t *a);
+
+/*
+ * Parse an integer
+ */
+ae_t a_arg2long(cstr arg, long *out);

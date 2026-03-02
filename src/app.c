@@ -120,3 +120,24 @@ ae_t a_closed(app_t *a) {
   assert(a != NULL);
   return a->closed;
 }
+
+ae_t a_arg2long(cstr arg, long *out) {
+  assert(arg != NULL);
+  assert(out != NULL);
+
+  char *end;
+  *out = strtol(arg, &end, 10);
+
+  int zero_digits = (end == arg);
+  int non_digits = (*end != '\0');
+  int errored = (errno != 0);
+
+  if (zero_digits || non_digits)
+    return ae_number;
+
+  else if (errored)
+    return ae_stdlib;
+
+  else
+    return ae_ok;
+}
