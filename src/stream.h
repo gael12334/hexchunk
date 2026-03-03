@@ -187,7 +187,7 @@ se_t s_pop(stream_t *s, long size);
 /*
  * Attempts to find one pattern from `mem` in the stream
  */
-se_t s_seek(stream_t *s, stream_t *mem, size_t num, long *which);
+se_t s_seek(stream_t *s, stream_t *mem, size_t num, long *ndx, long limit);
 
 /*
  * Check if stream reached end-of-file

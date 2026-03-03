@@ -337,10 +337,10 @@ se_t s_pop(stream_t *s, long size) {
   return se_ok;
 }
 
-se_t s_seek(stream_t *s, stream_t *needlelist, size_t num, long *which) {
+se_t s_seek(stream_t *s, stream_t *list, size_t num, long *ndx, long limit) {
   assert(s != NULL);
-  assert(needlelist != NULL);
-  assert(which != NULL);
+  assert(list != NULL);
+  assert(ndx != NULL);
   check_canread(s->mode, {});
 
   se_t err;
@@ -351,40 +351,29 @@ se_t s_seek(stream_t *s, stream_t *needlelist, size_t num, long *which) {
   long *count;
   int8_t s_byte;
   int8_t m_byte;
+  long c = 0;
 
-  while (s_consumable(s, &step, &err)) {
+  while (s_consumable(s, &step, &err) && c < limit) {
     err = s_readbyte(s, &s_byte, &read);
-    check_se(err, {
-      hint = 1;
-      goto exception;
-    });
+    if (err)
+      break;
 
-    for (stream_t *needle = needlelist; needle != needlelist + num; needle++) {
-      int consumable = !s_consumable(needle, &step, &err);
-      check_se(err, {
-        hint = 2;
-        goto exception;
-      });
-      if (consumable) {
-        s_start(needle);
-        continue;
-      }
-
-      long needle_index = needle - needlelist;
+    for (stream_t *needle = list; needle != list + num; needle++) {
+      long needle_index = needle - list;
       count = &matching[needle_index];
       err = s_readbyte(needle, &m_byte, &read);
-      check_se(err, {
-        hint = 3;
-        goto exception;
-      });
+      if (err) {
+        c = limit;
+        break;
+      }
 
       if (s_match(s_byte, m_byte, *count, needle->size)) {
-        *which = needle_index;
+        *ndx = needle_index;
         free(matching);
         return se_ok;
       }
 
-      else if (s_byte == m_byte) {
+      else if (s_byte == m_byte && s_consumed(needle) == se_ok) {
         (*count)++;
       }
 
@@ -393,18 +382,13 @@ se_t s_seek(stream_t *s, stream_t *needlelist, size_t num, long *which) {
         s_start(needle);
       }
     }
+
+    c++;
   }
 
-  check_se(err, {
-    hint = 4;
-    goto exception;
-  });
   free(matching);
+  check_se(err, { return err; });
   return se_nomatch;
-
-exception:
-  free(matching);
-  return err;
 }
 
 se_t s_consumed(stream_t *s) {

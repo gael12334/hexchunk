@@ -3,9 +3,9 @@
 #
 
 files=("src/hex.c" "src/stream.c" "src/app.c" "src/path.c" "src/main.c")
-output="hex.elf"
+output="hex-aarch64.elf"
 
-gcc ${files[@]} -o $output -ggdb
+aarch64-linux-gnu-gcc ${files[@]} -o $output -ggdb -static
 if [ $? -eq 0 ]; then
   chmod +x $output
 
@@ -13,4 +13,3 @@ if [ $? -eq 0 ]; then
     "./${output}"
   fi
 fi
-

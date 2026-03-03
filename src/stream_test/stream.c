@@ -482,7 +482,7 @@ void s_test_seek(void) {
   s_openmem(&list[1], &needles[1], sm_read);
 
   // act
-  se_t error = s_seek(&stream, list, 2, &which);
+  se_t error = s_seek(&stream, list, 2, &which, stream.size);
 
   // assert
   fclose(stream.handle);
