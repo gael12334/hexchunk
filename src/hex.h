@@ -3,6 +3,9 @@
  */
 
 #pragma once
+
+#include <ctype.h>
+
 #include "app.h"
 #include "path.h"
 
@@ -125,9 +128,14 @@ int h_atmark(app_t *app, ha_t *args);
 int h_quit(app_t *app, ha_t *args);
 
 /*
- * Find a byte sequence
+ * Find a word sequence
  */
 int h_find(app_t *app, ha_t *args);
+
+/*
+ * Find an hexadecimal byte sequence
+ */
+int h_findx(app_t *app, ha_t *args);
 
 /*
  * Find images

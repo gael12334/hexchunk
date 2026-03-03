@@ -57,7 +57,7 @@ void h_util_destroy_app(hexapp_t *app) {
 void h_test_open(void) {
   // arrange
   hexapp_t app = h_util_create_app(h_open);
-  str args[] = {"test", "dump.elf"};
+  str args[] = {"test", "dump.sample"};
   aa_t aa = {.argc = 2, .argv = args};
 
   // act
@@ -191,6 +191,22 @@ void h_test_find(void) {
   t_ok();
 }
 
+void h_test_findx(void) {
+  // arrange
+  hexapp_t app = h_util_create_app_open_file(h_findx);
+  str args[] = {"test", "53E57464", "1000"};
+  aa_t aa = {.argc = 3, .argv = args};
+
+  // act
+  a_dispatch(&app.app, "test", app.app.cmdbuf, app.app.cmdnum, &aa);
+
+  // assert
+  int result = app.app.result;
+  h_util_destroy_app(&app);
+  t_exp("%i", he_ok, "%i", result, {});
+  t_ok();
+}
+
 int main() {
   h_test_open();
   h_test_open_failed();
@@ -200,5 +216,6 @@ int main() {
   h_test_view();
   h_test_view_failed();
   h_test_find();
+  h_test_findx();
   return 0;
 }

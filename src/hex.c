@@ -53,7 +53,7 @@ static void h_readrow(stream_t *s, long *len, hr_t *out, long off, long size) {
     pch = &out->ascii[i];
     err = s_readbyte(s, pch, &read);
 
-    if (err == 0 && read == 1 && off + i < size) {
+    if (err == 0 && read == 1 && off + i < off + size) {
       int low = *pch & 0x0F;
       int high = (*pch & 0xF0) >> 4;
       out->hex[i][0] = hexchars[high];
@@ -109,6 +109,56 @@ static int h_showhex(stream_t *stream, long size) {
   return he_ok;
 }
 
+static int h_pos_size(stream_t *stream, long *pos, long *size) {
+  int err;
+
+  err = s_pos(stream, pos);
+  check_he(err, { printf("Unable to get stream pos; error code %i\n", err); });
+
+  err = s_pos(stream, size);
+  check_he(err, { printf("Unable to get stream size; error code %i\n", err); });
+
+  return he_ok;
+}
+
+static int h_check(app_t *app, ha_t *args, long expctd, hexapp_t **hexapp) {
+  assert(app != NULL && args != NULL);
+  check_args(args->argc, expctd, { printf("Expected %li arguments", expctd); });
+
+  *hexapp = (hexapp_t *)app;
+  check_occupied((*hexapp)->hex.state, { puts("Stream is already in use."); });
+
+  return he_ok;
+}
+
+static int h_fndpttrn(hexapp_t *ha, ha_t *args, long pos, long sz, sb_t *pmem) {
+  int err;
+
+  // 2nd arg : range
+  long range;
+  err = a_arg2long(args->argv[2], &range);
+  check_he(err, { printf("Failed to parse range; error code %i.\n", err); });
+
+  if (pos + range > sz || range <= 0) {
+    range = sz - pos;
+  }
+
+  long which = -1;
+  stream_t stream = {0};
+  err = s_openmem(&stream, pmem, sm_binary_read);
+  check_he(err, { printf("Stream of pattern failed; error code: %i\n", err); });
+
+  err = s_seek(&ha->hex.stream, &stream, 1, &which);
+  s_close(&stream);
+  check_he(err, { printf("Seek failed; error code: %i\n", err); });
+
+  err = s_pos(&ha->hex.stream, &pos);
+  check_he(err, { printf("Unable to get stream pos; error code %i\n", err); });
+
+  printf("Found pattern at offset %li.\n", pos - pmem->size);
+  return he_ok;
+}
+
 /*******************************************************************************
  *                            Hex functions
  *******************************************************************************/
@@ -116,13 +166,16 @@ static int h_showhex(stream_t *stream, long size) {
 int h_init(hexapp_t *app) {
   assert(app != NULL);
 
-  ac_t commands[] = {a_command("open", "open a file", h_open),
-                     a_command("close", "close loaded file", h_close),
-                     a_command("move", "move stream position", h_move),
-                     a_command("view", "view stream bytes", h_view),
-                     a_command("quit", "close loaded file & quit", h_quit),
-                     a_command("find", "find a pattern in file", h_find),
-                     a_command("help", "The help menu", a_help)};
+  ac_t commands[] = {
+      a_command("open", "open a file", h_open),
+      a_command("close", "close loaded file", h_close),
+      a_command("move", "move stream position", h_move),
+      a_command("view", "view stream bytes", h_view),
+      a_command("quit", "close loaded file & quit", h_quit),
+      a_command("find", "find a pattern in file", h_find),
+      a_command("findx", "find an hex pattern in file", h_findx),
+      a_command("help", "The help menu", a_help),
+  };
 
   ap_t ap = {
       .commands = commands,
@@ -166,13 +219,11 @@ int h_open(app_t *app, ha_t *args) {
 }
 
 int h_close(app_t *app, ha_t *args) {
-  assert(app != NULL);
-  assert(args != NULL);
-  hexapp_t *ha = (hexapp_t *)app;
   int err;
+  hexapp_t *ha;
 
-  check_args(args->argc, 1, { puts("Expected 1 arguments."); });
-  check_occupied(ha->hex.state, { puts("Stream is unused."); });
+  err = h_check(app, args, 1, &ha);
+  check_he(err, {});
 
   err = s_close(&ha->hex.stream);
   check_he(err, { printf("Failed to close file; error code %i.\n", err); });
@@ -187,13 +238,11 @@ int h_close(app_t *app, ha_t *args) {
 }
 
 int h_move(app_t *app, ha_t *args) {
-  assert(app != NULL);
-  assert(args != NULL);
-  hexapp_t *ha = (hexapp_t *)app;
   int err;
+  hexapp_t *ha;
 
-  check_args(args->argc, 2, { puts("Expected 2 arguments."); });
-  check_occupied(ha->hex.state, { puts("Stream is unused."); });
+  err = h_check(app, args, 2, &ha);
+  check_he(err, {});
 
   long offset;
   err = a_arg2long(args->argv[1], &offset);
@@ -206,13 +255,11 @@ int h_move(app_t *app, ha_t *args) {
 }
 
 int h_view(app_t *app, ha_t *args) {
-  assert(app != NULL);
-  assert(args != NULL);
-  hexapp_t *ha = (hexapp_t *)app;
   int err;
+  hexapp_t *ha;
 
-  check_args(args->argc, 2, { puts("Expected 2 arguments."); });
-  check_occupied(ha->hex.state, { puts("Stream is unused."); });
+  err = h_check(app, args, 2, &ha);
+  check_he(err, {});
 
   long size;
   err = a_arg2long(args->argv[1], &size);
@@ -245,50 +292,64 @@ int h_quit(app_t *app, ha_t *args) {
 }
 
 int h_find(app_t *app, ha_t *args) {
-  assert(app != NULL);
-  assert(args != NULL);
-
-  hexapp_t *ha = (hexapp_t *)app;
   int err;
+  hexapp_t *ha;
 
-  check_args(args->argc, 3, { puts("Expected 3 arguments."); });
-  check_occupied(ha->hex.state, { puts("Stream is unused."); });
+  err = h_check(app, args, 3, &ha);
+  check_he(err, {});
 
-  long position;
-  err = s_pos(&ha->hex.stream, &position);
-  check_he(err, { printf("Unable to get stream pos; error code %i\n", err); });
+  long position, size;
+  err = h_pos_size(&ha->hex.stream, &position, &size);
+  check_he(err, {});
 
-  long size;
-  err = s_pos(&ha->hex.stream, &size);
-  check_he(err, { printf("Unable to get stream size; error code %i\n", err); });
-
-  // 1st arg : pattern
   str pattern = args->argv[1];
+  sb_t pmem = {.data = pattern, .size = strlen(pattern)};
+  return h_fndpttrn(ha, args, position, size, &pmem);
+}
 
-  // 2nd arg : range
-  long range;
-  err = a_arg2long(args->argv[2], &range);
-  check_he(err, { printf("Failed to parse range; error code %i.\n", err); });
+int h_findx(app_t *app, ha_t *args) {
+  int err;
+  hexapp_t *ha;
 
-  if (position + range > size || range <= 0) {
-    range = size - position;
+  err = h_check(app, args, 3, &ha);
+  check_he(err, {});
+
+  long position, size;
+  err = h_pos_size(&ha->hex.stream, &position, &size);
+  check_he(err, {});
+
+  size_t length = strlen(args->argv[1]);
+  int8_t *pattern = malloc(sizeof(int8_t) * length);
+  assert(pattern != NULL);
+  memcpy(pattern, args->argv[1], length);
+  size_t pttrnsz = (length + (length & 1)) >> 1;
+  size_t dest = length - 1;
+  char offset[] = {'0', 'A' - 10, 'a' - 10};
+  char limits[] = {'9', 'F' - 10, 'f' - 10};
+
+  for (size_t i = length; i > 0; i--) {
+    int8_t ch = pattern[i - 1];
+    int8_t type = ((ch & 0x60) >> 5) - 1;
+    int8_t odd = (i & 1) != (length & 1);
+    int8_t value = ch - offset[type];
+
+    if (value < 0 || value > limits[type]) {
+      printf("Invalid digit @ pos %zu (%c)\n", i - 1, pattern[i - 1]);
+      return he_number;
+    }
+
+    value <<= (odd * 4);
+    pattern[dest] *= odd;
+    pattern[dest] |= value;
+    dest -= odd;
   }
 
-  long which = -1;
-  sb_t memory = {.data = pattern, .size = strlen(pattern)};
-  stream_t stream = {0};
-  err = s_openmem(&stream, &memory, sm_binary_read);
-  check_he(err, { printf("Stream of pattern failed; error code: %i\n", err); });
-
-  err = s_seek(&ha->hex.stream, &stream, 1, &which);
-  s_close(&stream);
-  check_he(err, { printf("Seek failed; error code: %i\n", err); });
-
-  err = s_pos(&ha->hex.stream, &position);
-  check_he(err, { printf("Unable to get stream pos; error code %i\n", err); });
-
-  printf("Found pattern at offset %li.\n", position - memory.size);
-  return he_ok;
+  pattern += (length - pttrnsz);
+  sb_t pmem = {.data = pattern, .size = pttrnsz};
+  err = h_fndpttrn(ha, args, position, size, &pmem);
+  pattern -= (length - pttrnsz);
+  free(pattern);
+  return err;
 }
 
 int h_findimg(app_t *app, ha_t *args);
