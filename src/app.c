@@ -152,3 +152,99 @@ int a_help(struct app *a, aa_t *args) {
 
   return ae_ok;
 }
+
+static at_t *a_parseformat(str start, cstr end, size_t i, size_t *num) {
+  // assertion
+  assert(start != NULL);
+  assert(num != NULL);
+
+  // check if end reached
+  if (start == end) {
+    *num = i;
+    return NULL;
+  }
+
+  // length of token
+  size_t n = 0;
+  while (start[n] != *end && start[n] != ' ')
+    n++;
+
+  // replace space by NUL
+  size_t b = n;
+  while (start[b] != *end && start[b] == ' ')
+    start[b++] = '\0';
+
+  // next iteration
+  at_t *result = a_parseformat(start + b, end, i + 1, num);
+
+  // if num is also zero, it means there was an error.
+  if (result == NULL && *num == 0)
+    return NULL;
+
+  // tokens
+  at_t *tokens = (result) ? result : malloc(sizeof(at_t) * (i + 1));
+  assert(tokens != NULL);
+
+  // return null if token only contains '%'
+  if (start[0] == '%' && n == 1) {
+    if (tokens != NULL)
+      free(tokens);
+    return NULL;
+  }
+
+  // %s -> variable 'name' of type 'string'
+  // %x -> variable 'name' of type 'hex'
+  // %i -> variable 'name' of type 'integer'
+  // %f -> variable 'name' of type 'decimal'
+  an_t type = an_identif;
+  size_t size = 0;
+  if (start[0] == '%' && n >= 2) {
+    switch (start[1]) {
+    case an_integer:
+      type = an_integer;
+      size = sizeof(long);
+      break;
+    case an_hexadec:
+      type = an_hexadec;
+      size = sizeof(long);
+      break;
+    case an_decimal:
+      type = an_decimal;
+      size = sizeof(double);
+      break;
+    case an_charseq:
+      type = an_charseq;
+      size = 0;
+      break;
+    default:
+      if (tokens != NULL)
+        free(tokens);
+      return NULL;
+    }
+  }
+
+  // allocate data
+  void *data = malloc(size);
+  assert(data != NULL);
+  tokens[i] = (at_t){
+      .data = data,
+      .size = size,
+      .text = start,
+      .type = type,
+  };
+
+  return tokens;
+}
+
+int a_addroute(app_t *a, str format, size_t length, ad_t function) {
+  assert(a != NULL);
+  assert(format != NULL);
+  assert(function != NULL);
+
+  size_t num = 0;
+  at_t *tokens = a_parseformat(format, format + length, 0, &num);
+
+  if (tokens == NULL && num == 0) {
+    return ae_null;
+  }
+}

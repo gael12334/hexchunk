@@ -25,7 +25,7 @@ typedef struct {
 /*
  * App command delegate
  */
-typedef int (*ad_t)(struct app *a, aa_t *args);
+typedef int (*ad_t)(void *a, aa_t *args);
 
 /*
  * App error codes
@@ -41,6 +41,35 @@ typedef enum {
   ae_stdlib,
   ae_size,
 } ae_t;
+
+/*
+ * Route identifier token types
+ */
+typedef enum {
+  an_identif = 0x00,
+  an_integer = 'i',
+  an_decimal = 'f',
+  an_hexadec = 'x',
+  an_charseq = 's',
+} an_t;
+
+/*
+ * Route identifier token
+ */
+typedef struct {
+  an_t type;
+  cstr text;
+  size_t size;
+  void *data;
+} at_t;
+
+/*
+ * App route object
+ */
+typedef struct {
+  at_t *identifiers;
+  ad_t delegate;
+} ar_t;
 
 /*
  * App command object
@@ -143,3 +172,8 @@ ae_t a_arg2long(cstr arg, long *out);
  */
 
 int a_help(struct app *a, aa_t *args);
+
+/*
+ * Add a route to app
+ */
+int a_addroute(app_t *a, str format, size_t length, ad_t function);
