@@ -4,49 +4,49 @@
 
 #include "stream.h"
 
-#define check_errno(error, clean)                                              \
-  errno = 0;                                                                   \
-  if (errno) {                                                                 \
-    clean;                                                                     \
-    return error;                                                              \
+#define check_errno(error, clean)                                                        \
+  errno = 0;                                                                             \
+  if (errno) {                                                                           \
+    clean;                                                                               \
+    return error;                                                                        \
   }
 
-#define check_handle(s, clean)                                                 \
-  if (s->handle == NULL) {                                                     \
-    clean;                                                                     \
-    return se_null;                                                            \
+#define check_handle(s, clean)                                                           \
+  if (s->handle == NULL) {                                                               \
+    clean;                                                                               \
+    return se_null;                                                                      \
   }
 
-#define check_se(se, clean)                                                    \
-  if (se != se_ok) {                                                           \
-    clean;                                                                     \
-    return se;                                                                 \
+#define check_se(se, clean)                                                              \
+  if (se != se_ok) {                                                                     \
+    clean;                                                                               \
+    return se;                                                                           \
   }
 
-#define check_canread(mode, clean)                                             \
-  if (!s_canread(mode)) {                                                      \
-    clean;                                                                     \
-    return se_mode;                                                            \
+#define check_canread(mode, clean)                                                       \
+  if (!s_canread(mode)) {                                                                \
+    clean;                                                                               \
+    return se_mode;                                                                      \
   }
 
-#define check_null(p, clean)                                                   \
-  if (p == NULL) {                                                             \
-    clean;                                                                     \
-    return se_null;                                                            \
+#define check_null(p, clean)                                                             \
+  if (p == NULL) {                                                                       \
+    clean;                                                                               \
+    return se_null;                                                                      \
   }
 
 /*******************************************************************************
  *                       Internal utility functions
  *******************************************************************************/
 
-static void *s_alloc(long size) {
-  void *out = malloc(size);
+static void* s_alloc(long size) {
+  void* out = malloc(size);
   assert(out != NULL);
   memset(out, 0, size);
   return out;
 }
 
-static long s_consumable(stream_t *s, long *step, se_t *err) {
+static long s_consumable(stream_t* s, long* step, se_t* err) {
   int result = 1;
   result &= (*err = s_poll(s, *step, step)) == se_ok;
   result &= (*step) == 1;
@@ -72,12 +72,12 @@ static long s_canwrite(sm_t mode) {
   return (!readmode && !rbinmode);
 }
 
-static void s_stream_cleanup(stream_t *s) {
+static void s_stream_cleanup(stream_t* s) {
   fclose(s->handle);
   memset(s, 0, sizeof(*s));
 }
 
-static se_t s_stream(stream_t *out, FILE *handle, st_t type, sm_t mode) {
+static se_t s_stream(stream_t* out, FILE* handle, st_t type, sm_t mode) {
   out->handle = handle;
   out->mode = mode;
   out->type = type;
@@ -90,28 +90,28 @@ static se_t s_stream(stream_t *out, FILE *handle, st_t type, sm_t mode) {
    */
 
   switch (out->mode & 0x000000FF) {
-  case sm_append:
-    out->size = ftell(out->handle);
-    check_errno(se_stdio, { s_stream_cleanup(out); });
-    break;
+    case sm_append:
+      out->size = ftell(out->handle);
+      check_errno(se_stdio, { s_stream_cleanup(out); });
+      break;
 
-  case sm_write:
-    out->size = 0L;
-    break;
+    case sm_write:
+      out->size = 0L;
+      break;
 
-  case sm_read:
-    fseek(out->handle, 0, SEEK_END);
-    check_errno(se_stdio, { s_stream_cleanup(out); });
+    case sm_read:
+      fseek(out->handle, 0, SEEK_END);
+      check_errno(se_stdio, { s_stream_cleanup(out); });
 
-    out->size = ftell(out->handle);
-    check_errno(se_stdio, { s_stream_cleanup(out); });
+      out->size = ftell(out->handle);
+      check_errno(se_stdio, { s_stream_cleanup(out); });
 
-    rewind(out->handle);
-    break;
+      rewind(out->handle);
+      break;
 
-  default:
-    s_stream_cleanup(out);
-    return se_mode;
+    default:
+      s_stream_cleanup(out);
+      return se_mode;
   }
 
   return se_ok;
@@ -121,7 +121,7 @@ static se_t s_stream(stream_t *out, FILE *handle, st_t type, sm_t mode) {
  *                            File functions
  *******************************************************************************/
 
-se_t s_openfile(stream_t *out, cstr path, sm_t mode) {
+se_t s_openfile(stream_t* out, cstr_t path, sm_t mode) {
   assert(out != NULL);
   assert(path != NULL);
 
@@ -129,26 +129,26 @@ se_t s_openfile(stream_t *out, cstr path, sm_t mode) {
   assert(len < PATH_MAX - 1);
 
   st_t type = st_file;
-  FILE *handle = fopen(path, (const char *)&mode);
+  FILE* handle = fopen(path, (const char*)&mode);
   check_null(handle, { memset(out, 0, sizeof(*out)); });
   check_errno(se_stdio, { memset(out, 0, sizeof(*out)); });
 
   return s_stream(out, handle, type, mode);
 }
 
-se_t s_openmem(stream_t *out, sb_t *mem, sm_t mode) {
+se_t s_openmem(stream_t* out, sb_t* mem, sm_t mode) {
   assert(out != NULL);
   assert(mem != NULL);
   assert(mem->size >= 0);
 
   st_t type = st_memory;
-  FILE *handle = fmemopen(mem->data, mem->size, (cstr)&mode);
+  FILE* handle = fmemopen(mem->data, mem->size, (cstr_t)&mode);
   check_null(handle, { memset(out, 0, sizeof(*out)); });
   check_errno(se_stdio, { memset(out, 0, sizeof(*out)); });
   return s_stream(out, handle, type, mode);
 }
 
-se_t s_close(stream_t *s) {
+se_t s_close(stream_t* s) {
   assert(s != NULL);
   check_handle(s, {});
 
@@ -159,7 +159,7 @@ se_t s_close(stream_t *s) {
   return se_ok;
 }
 
-se_t s_flush(stream_t *s) {
+se_t s_flush(stream_t* s) {
   assert(s != NULL);
   check_handle(s, {});
 
@@ -169,31 +169,31 @@ se_t s_flush(stream_t *s) {
   return se_ok;
 }
 
-se_t s_length(stream_t *s, long *out) {
+se_t s_length(stream_t* s, long* out) {
   assert(s != NULL);
   assert(out != NULL);
 
   // absence of break in append and write
   // is intentional.
   switch (s->mode & 0x000000FF) {
-  case sm_append:
-    fseek(s->handle, 0, SEEK_END);
-    check_errno(se_stdio, {});
+    case sm_append:
+      fseek(s->handle, 0, SEEK_END);
+      check_errno(se_stdio, {});
 
-  case sm_write:
-    s->size = ftell(s->handle);
-    check_errno(se_stdio, {});
+    case sm_write:
+      s->size = ftell(s->handle);
+      check_errno(se_stdio, {});
 
-  case sm_read:
-    *out = s->size;
-    return se_ok;
+    case sm_read:
+      *out = s->size;
+      return se_ok;
 
-  default:
-    return se_mode;
+    default:
+      return se_mode;
   }
 }
 
-se_t s_read(stream_t *s, sb_t *out, long *read) {
+se_t s_read(stream_t* s, sb_t* out, long* read) {
   assert(s != NULL);
   assert(out != NULL);
   assert(out->data != NULL);
@@ -205,27 +205,27 @@ se_t s_read(stream_t *s, sb_t *out, long *read) {
   return se_ok;
 }
 
-se_t s_readbyte(stream_t *s, int8_t *out, long *read) {
+se_t s_readbyte(stream_t* s, int8_t* out, long* read) {
   sb_t mem = s_primitve(out);
   return s_read(s, &mem, read);
 }
 
-se_t s_readshort(stream_t *s, int16_t *out, long *read) {
+se_t s_readshort(stream_t* s, int16_t* out, long* read) {
   sb_t mem = s_primitve(out);
   return s_read(s, &mem, read);
 }
 
-se_t s_readinteger(stream_t *s, int32_t *out, long *read) {
+se_t s_readinteger(stream_t* s, int32_t* out, long* read) {
   sb_t mem = s_primitve(out);
   return s_read(s, &mem, read);
 }
 
-se_t s_readlong(stream_t *s, int64_t *out, long *read) {
+se_t s_readlong(stream_t* s, int64_t* out, long* read) {
   sb_t mem = s_primitve(out);
   return s_read(s, &mem, read);
 }
 
-se_t s_write(stream_t *s, sb_t *mem, long *written) {
+se_t s_write(stream_t* s, sb_t* mem, long* written) {
   assert(s != NULL);
   assert(mem != NULL);
   assert(mem->data != NULL);
@@ -236,7 +236,7 @@ se_t s_write(stream_t *s, sb_t *mem, long *written) {
   return se_ok;
 }
 
-se_t s_poll(stream_t *s, long size, long *out) {
+se_t s_poll(stream_t* s, long size, long* out) {
   assert(s != NULL);
   assert(out != NULL);
   check_handle(s, {});
@@ -266,7 +266,7 @@ se_t s_poll(stream_t *s, long size, long *out) {
   }
 }
 
-se_t s_start(stream_t *s) {
+se_t s_start(stream_t* s) {
   assert(s != NULL);
   check_handle(s, {});
 
@@ -274,7 +274,7 @@ se_t s_start(stream_t *s) {
   return se_ok;
 }
 
-se_t s_end(stream_t *s) {
+se_t s_end(stream_t* s) {
   assert(s != NULL);
   check_handle(s, {});
 
@@ -283,7 +283,7 @@ se_t s_end(stream_t *s) {
   return se_ok;
 }
 
-se_t s_pos(stream_t *s, long *out) {
+se_t s_pos(stream_t* s, long* out) {
   assert(s != NULL);
   check_handle(s, {});
 
@@ -292,7 +292,7 @@ se_t s_pos(stream_t *s, long *out) {
   return se_ok;
 }
 
-se_t s_move(stream_t *s, long where) {
+se_t s_move(stream_t* s, long where) {
   assert(s != NULL);
   check_handle(s, {});
   check_canread(s->mode, {});
@@ -302,7 +302,7 @@ se_t s_move(stream_t *s, long where) {
   return se_ok;
 }
 
-se_t s_push(stream_t *s, long size) {
+se_t s_push(stream_t* s, long size) {
   assert(s != NULL);
   check_handle(s, {});
   check_canread(s->mode, {});
@@ -319,7 +319,7 @@ se_t s_push(stream_t *s, long size) {
   return se_ok;
 }
 
-se_t s_pop(stream_t *s, long size) {
+se_t s_pop(stream_t* s, long size) {
   assert(s != NULL);
   check_handle(s, {});
   check_canread(s->mode, {});
@@ -337,7 +337,7 @@ se_t s_pop(stream_t *s, long size) {
   return se_ok;
 }
 
-se_t s_seek(stream_t *s, stream_t *list, size_t num, long *ndx, long limit) {
+se_t s_seek(stream_t* s, stream_t* list, size_t num, long* ndx, long limit) {
   assert(s != NULL);
   assert(list != NULL);
   assert(ndx != NULL);
@@ -347,8 +347,8 @@ se_t s_seek(stream_t *s, stream_t *list, size_t num, long *ndx, long limit) {
   long hint = 0;
   long read;
   long step = 1;
-  long *matching = s_alloc(sizeof(long) * num);
-  long *count;
+  long* matching = s_alloc(sizeof(long) * num);
+  long* count;
   int8_t s_byte;
   int8_t m_byte;
   long c = 0;
@@ -358,7 +358,7 @@ se_t s_seek(stream_t *s, stream_t *list, size_t num, long *ndx, long limit) {
     if (err)
       break;
 
-    for (stream_t *needle = list; needle != list + num; needle++) {
+    for (stream_t* needle = list; needle != list + num; needle++) {
       long needle_index = needle - list;
       count = &matching[needle_index];
       err = s_readbyte(needle, &m_byte, &read);
@@ -391,7 +391,7 @@ se_t s_seek(stream_t *s, stream_t *list, size_t num, long *ndx, long limit) {
   return se_nomatch;
 }
 
-se_t s_consumed(stream_t *s) {
+se_t s_consumed(stream_t* s) {
   assert(s != NULL);
 
   int status = feof(s->handle);

@@ -49,7 +49,7 @@ typedef enum {
  * String wrapper
  */
 typedef struct {
-  cstr chars;
+  cstr_t chars;
   size_t size;
 } ps_t;
 

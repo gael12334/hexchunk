@@ -61,7 +61,7 @@ void a_util_create_cmdbuf(app_t *app) {
   app->cmdnum = num;
 }
 
-void a_util_create_argbuf(app_t *app, const str *args) {
+void a_util_create_argbuf(app_t *app, const str_t *args) {
   size_t alloc = 0;
   while (args[alloc] != NULL) {
     alloc++;
@@ -76,7 +76,7 @@ void a_util_create_argbuf(app_t *app, const str *args) {
 }
 
 app_t a_util_create_app(void) {
-  str args[] = {"argument0", NULL};
+  str_t args[] = {"argument0", NULL};
   app_t app;
   app.closed = ae_opened;
   app.version = a_version(1, 2, 3);

@@ -57,7 +57,7 @@ void h_util_destroy_app(hexapp_t *app) {
 void h_test_open(void) {
   // arrange
   hexapp_t app = h_util_create_app(h_open);
-  str args[] = {"test", "dump.sample"};
+  str_t args[] = {"test", "dump.sample"};
   aa_t aa = {.argc = 2, .argv = args};
 
   // act
@@ -76,7 +76,7 @@ void h_test_open(void) {
 void h_test_open_failed(void) {
   // arrange
   hexapp_t app = h_util_create_app(h_open);
-  str args[] = {"test", "elephant.elf"};
+  str_t args[] = {"test", "elephant.elf"};
   aa_t aa = {.argc = 2, .argv = args};
 
   // act
@@ -93,7 +93,7 @@ void h_test_open_failed(void) {
 void h_test_close(void) {
   // arrange
   hexapp_t app = h_util_create_app_open_file(h_close);
-  str args[] = {"test"};
+  str_t args[] = {"test"};
   aa_t aa = {.argc = 1, .argv = args};
 
   // act
@@ -110,7 +110,7 @@ void h_test_close(void) {
 void h_test_move(void) {
   // arrange
   hexapp_t app = h_util_create_app_open_file(h_move);
-  str args[] = {"test", "200"};
+  str_t args[] = {"test", "200"};
   aa_t aa = {.argc = 2, .argv = args};
 
   // act
@@ -128,7 +128,7 @@ void h_test_move(void) {
 void h_test_move_somehow_works(void) {
   // arrange
   hexapp_t app = h_util_create_app_open_file(h_move);
-  str args[] = {"test", "-3"};
+  str_t args[] = {"test", "-3"};
   aa_t aa = {.argc = 2, .argv = args};
 
   // act
@@ -146,7 +146,7 @@ void h_test_move_somehow_works(void) {
 void h_test_view(void) {
   // arrange
   hexapp_t app = h_util_create_app_open_file(h_view);
-  str args[] = {"test", "200"};
+  str_t args[] = {"test", "200"};
   aa_t aa = {.argc = 2, .argv = args};
 
   // act
@@ -162,7 +162,7 @@ void h_test_view(void) {
 void h_test_view_failed(void) {
   // arrange
   hexapp_t app = h_util_create_app_open_file(h_view);
-  str args[] = {"test", "-3"};
+  str_t args[] = {"test", "-3"};
   aa_t aa = {.argc = 2, .argv = args};
 
   // act
@@ -178,7 +178,7 @@ void h_test_view_failed(void) {
 void h_test_find(void) {
   // arrange
   hexapp_t app = h_util_create_app_open_file(h_find);
-  str args[] = {"test", "ELF", "200"};
+  str_t args[] = {"test", "ELF", "200"};
   aa_t aa = {.argc = 3, .argv = args};
 
   // act
@@ -194,7 +194,7 @@ void h_test_find(void) {
 void h_test_findx(void) {
   // arrange
   hexapp_t app = h_util_create_app_open_file(h_findx);
-  str args[] = {"test", "53E57464", "1000"};
+  str_t args[] = {"test", "53E57464", "1000"};
   aa_t aa = {.argc = 3, .argv = args};
 
   // act
