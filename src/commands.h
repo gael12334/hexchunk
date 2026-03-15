@@ -3,93 +3,55 @@
  */
 
 #pragma once
+#include "arrayview.h"
+#include "error.h"
 #include "listview.h"
 #include "typedef.h"
 
-/*
- * int fait_qqchose_i(int* quit, int argc, valeur_t* argv) { }
- *
- * int fait_qqchose_x(int* quit, int argc, valeur_t* argv) { }
- *
- * #define c_match(str) "%m\" #str "\" "
- * #define c_integer "%i "
- * #define c_number "%f "
- * #define c_string "%s "
- * #define c_hex "%x "
- *
- * int main() {
- *   char format[] = c_match("find") c_string c_integer;
- *   register(format, sizeof(format), fait_qqchose_i)
- *
- *   cleanup
- * }
- */
+#include <ctype.h>
 
 /*******************************************************************************
- *                            Artificial type definitions
+ *                                  Constants
  *******************************************************************************/
+typedef enum : uint8_t {
+  CARGINT, // expect an integer
+  CARGNUM, // expect a number
+  CARGWRD, // expect a whitespace delimited word
+  CARGSTR, // expect a string literal surrounded by double-quotes
+  CARGHEX  // expect an hexadecimal string
+} catype_t;
 
-// Command handler
-typedef int (*cmdfunc_t)(int* quit, uint64_t argc, struct value* argv);
-
-// Command format object
-struct cmdformat {
-  const char* opt;
-  const char* end;
-
-  enum {
-    c_m,
-    c_i,
-    c_f,
-    c_s,
-    c_x
-  } type;
-};
-
-// Command object
-struct cmdobj {
-  cmdfunc_t handler;
-  size_t length;
-  struct cmdformat* format;
-  uint64_t reserved;
-  listviewof_t(struct value) args;
-};
-
-// Command manager
-struct cmdmgr {
-  listviewof_t(struct cmdobj) commands; // collection of commands
+enum {
+  c_default_alloc = 10
 };
 
 /*******************************************************************************
- *                            Public macros
+ *                               Type definitions
  *******************************************************************************/
+typedef int (*cmdfn_t)(void* extra, size_t argc, value_t* argv);
 
-#define c_match(str)                                                                     \
-  (struct cmdformat) {                                                                   \
-    .opt = str, .end = strlen(str) + 1, .type = c_m                                      \
-  }
-#define c_integer                                                                        \
-  (struct cmdformat) {                                                                   \
-    .opt = NULL, .end = NULL, .type = c_i                                                \
-  }
-#define c_number                                                                         \
-  (struct cmdformat) {                                                                   \
-    .opt = NULL, .end = NULL, .type = c_f                                                \
-  }
-#define c_string                                                                         \
-  (struct cmdformat) {                                                                   \
-    .opt = NULL, .end = NULL, .type = c_s                                                \
-  }
-#define c_hex                                                                            \
-  (struct cmdformat) {                                                                   \
-    .opt = NULL, .end = NULL, .type = c_x                                                \
-  }
+typedef struct {
+  cmdfn_t handler;                   // function executed once a match is found
+  charview_t pattern;                // the command pattern that must be matched
+  arrayviewof_t(catype_t) cargstype; // types of arguments when parser finds a '*' char.
+  arrayviewof_t(value_t) carguments; // space used to store argument once parsed
+} cmd_t;
+
+typedef struct {
+  listviewof_t(cmd_t) commands; // list of commands
+} cmdmgr_t;
 
 /*******************************************************************************
- *                          Commands functions
+ *                                   Macros
  *******************************************************************************/
 
-int c_init(struct cmdmgr* cr);
-int c_deinit(struct cmdmgr* cr);
-int c_subscribe(struct cmdmgr* cr, struct cmdobj* co);
-int c_notify(struct cmdmgr* cr, char* command, size_t size);
+/*******************************************************************************
+ *                                  Functions
+ *******************************************************************************/
+
+int c_init(cmdmgr_t* mgr);
+int c_deinit(cmdmgr_t* mgr);
+int c_register(cmdmgr_t* mgr, charview_t pattern, vaargs_t argstype, cmdfn_t handler);
+int c_find(cmdmgr_t* mgr, charview_t pattern, cmd_t* out);
+int c_translate(cmd_t* cmd);
+int c_execute(cmd_t* cmd);

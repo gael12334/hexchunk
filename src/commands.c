@@ -3,218 +3,158 @@
  */
 
 #include "commands.h"
-#include "error.h"
-#include "parser.h"
 
-#include <stdlib.h>
-#include <string.h>
+#define c_whitespaces " \t\r\v\f\n"
 
 /*******************************************************************************
- *                              Constants
+ *                               Internal functions
  *******************************************************************************/
 
-#define c_default_elem_num (16)
-#define c_skip_command (0)
-#define c_check_command (1)
-
-/*******************************************************************************
- *                            Implementation
- *******************************************************************************/
-
-int c_init(struct cmdmgr* cr) {
-  if (cr == NULL)
-    e_throw_NULPTR(cr);
-
-  e_trycatch(lvof_resize(&cr->commands, c_default_elem_num), {/*no cleanup*/});
-  return 0;
-}
-
-int c_deinit(struct cmdmgr* cr) {
-  if (cr == NULL)
-    e_throw_NULPTR(cr);
-
-  // freeing all the command argument lists
-  struct cmdobj* cmdobj;
-  lvof_foreach(cmdobj, &cr->commands) {
-    e_trycatch(lvof_resize(&cmdobj->args, 0), {/*no cleanup*/});
+int c_gettok(const charview_t in, charview_t* out) {
+  size_t in_ndx = 0;
+  while (in_ndx < in.count && isspace(in.address[in_ndx])) {
+    in_ndx++;
   }
 
-  e_trycatch(lvof_resize(&cr->commands, 0), {/*no cleanup*/});
-  return 0;
-}
+  // abnormal state -- segmentation fault
+  if (in_ndx > in.count) {
+    e_throw_SIGSEG(in.address + in_ndx);
+  }
 
-int c_subscribe(struct cmdmgr* cr, struct cmdobj* co) {
-  if (cr == NULL)
-    e_throw_NULPTR(cr);
+  // empty string
+  if (in_ndx == in.count) {
+    out->count = 0;
+    out->address = in.address + in_ndx;
+    return __OK__;
+  }
 
-  if (co == NULL)
-    e_throw_NULPTR(co);
+  size_t out_sz = 0;
 
-  e_trycatch(lvof_append(&cr->commands, co), {/*no cleanup*/});
-  e_trycatch(lvof_resize(&co->args, c_default_elem_num), {/*no cleanup*/});
-  co->reserved = 0;
-  return 0;
-}
-
-int c_notify(struct cmdmgr* cr, char* command, size_t size) {
-  if (cr == NULL)
-    e_throw_NULPTR(cr);
-
-  if (command == NULL)
-    e_throw_NULPTR(command);
-
-  char* text = command;
-  char* tend = text + size;
-  size_t fndx = 0;
-  size_t left = cr->commands.count;
-
-  while (left > 0) {
-    struct cmdobj* co;
-    lvof_foreach(co, &cr->commands) {
-      if (fndx == 0)
-        co->reserved = c_check_command;
-
-      // format index beyond command format count.
-      if (fndx >= co->length) {
-        if (co->reserved == c_check_command)
-          left--;
-        continue;
-      }
-
-      // input was previously detected as invalid for this command
-      if (co->reserved == c_skip_command)
-        continue;
-
-      struct cmdformat* format = &co->format[fndx];
-      switch (format->type) {
-        // absolute match
-        case c_m: {
-          char* begin;
-          char* end;
-          int parser_error = p_parse_keyword(text, &begin, &end, tend - text);
-          int size_error = (end - begin != format->end - format->opt);
-
-          if (parser_error || size_error) {
-            co->reserved = c_skip_command;
-            left--;
-            continue;
-          }
-
-          int match_error = strncmp(begin, format->opt, (end - begin));
-          if (match_error) {
-            co->reserved = c_skip_command;
-            left--;
-            continue;
-          }
-
-          text = end;
-          break;
-        }
-
-        // integer
-        case c_i: {
-          char* end;
-          struct value value = {.type = v_int, .size = 0};
-          int parser_error = p_parse_integer(text, &end, (tend - text), &value.cvu.i64);
-
-          if (parser_error) {
-            co->reserved = c_skip_command;
-            left--;
-            continue;
-          }
-
-          e_trycatch(lvof_append(&co->args, &value), {});
-          text = end;
-          break;
-        }
-
-        // real number
-        case c_f: {
-          char* end;
-          struct value value = {.type = v_num, .size = 0};
-          int parser_error = p_parse_float(text, &end, (tend - text), &value.cvu.f64);
-
-          if (parser_error) {
-            co->reserved = c_skip_command;
-            left--;
-            continue;
-          }
-
-          e_trycatch(lvof_append(&co->args, &value), {});
-          text = end;
-          break;
-        }
-
-        // string
-        case c_s: {
-          char* begin;
-          char* end;
-          size_t length = (tend - text);
-          struct value value = {.type = v_str, .size = length};
-
-          int parser_error = p_parse_string(text, &begin, &end, length);
-          if (parser_error) {
-            co->reserved = c_skip_command;
-            left--;
-            continue;
-          }
-
-          int8_t* bytes = malloc(sizeof(char) * value.size);
-          if (bytes == NULL)
-            e_throw_NULPTR(bytes);
-
-          memcpy(bytes, begin, length - 1);
-          bytes[length - 1] = '\0';
-          value.size = end - begin;
-          value.cvu.str = (char*)bytes;
-          e_trycatch(lvof_append(&co->args, &value), {});
-          text = end;
-          break;
-        }
-
-        // hex string
-        case c_x: {
-          char* begin;
-          char* end;
-          size_t length = (tend - text);
-          struct value value = {.type = v_buf, .size = 0};
-
-          int parser_error = p_parse_hexstr(text, &begin, &end, length, &value.size);
-          if (parser_error) {
-            co->reserved = c_skip_command;
-            left--;
-            continue;
-          }
-
-          int8_t* bytes = malloc(sizeof(int8_t) * value.size);
-          if (bytes == NULL)
-            e_throw_NULPTR(bytes);
-
-          int conversion_err = p_parse_hexadecimal(begin, end, bytes, value.size);
-          if (conversion_err) {
-            free(bytes);
-            co->reserved = c_skip_command;
-            left--;
-            continue;
-          }
-
-          value.size = end - begin;
-          value.cvu.buf = bytes;
-          e_trycatch(lvof_append(&co->args, &value), {});
-          text = end;
-
-          break;
-        }
-      }
+  // parsing string literal
+  if (in.address[in_ndx] == '\"') {
+    in_ndx++;
+    while (in_ndx < in.count && in.address[in_ndx] != '\"') {
+      in_ndx++;
+      out_sz++;
     }
 
-    fndx++;
-  }
-  struct cmdobj* co;
-  lvof_foreach(co, &cr->commands) {
-    if (co->reserved == c_check_command)
-      return co->handler(NULL, co->args.count, co->args.address);
+    // abnormal state -- segmentation fault
+    if (in_ndx > in.count) {
+      e_throw_SIGSEG(in.address + in_ndx);
+    }
+
+    // missing closing double quotes
+    if (in_ndx == in.count) {
+      e_throw_BADOBJ(in);
+    }
+
+    // expect to have whitespace after closing double-quote
+    if (in_ndx + 1 < in.count && !isspace(in.address[in_ndx + 1])) {
+      e_throw_BADOBJ(in);
+    }
+
+    in_ndx++;
   }
 
-  return 1;
+  else {
+    while (in_ndx < in.count && !isspace(in.address[in_ndx])) {
+      in_ndx++;
+      out_sz++;
+    }
+
+    // abnormal state -- segmentation fault
+    if (in_ndx > in.count) {
+      e_throw_SIGSEG(in.address + in_ndx);
+    }
+  }
+
+  out->address = in.address + in_ndx;
+  out->count = out_sz;
+  return __OK__;
+}
+
+int c_cmptok(charview_t f, charview_t i, arrayview_t a, arrayview_t v) {
+  size_t arg_ndx = 0;
+  arrayviewof_t(catype_t) arg_arr = avof_cast(&a);
+
+  while (f.count > 0 && i.count > 0) {
+    e_trycatch(c_gettok(f, &f), { e_throw_THROWN(); });
+    e_trycatch(c_gettok(i, &i), { e_throw_THROWN(); });
+
+    if (f.address[0] == '*') {
+      switch (arg_arr.address[0]) { case CARGINT: }
+    }
+  }
+}
+
+/*******************************************************************************
+ *                                 Implementation
+ *******************************************************************************/
+
+int c_init(cmdmgr_t* mgr) {
+  if (mgr == NULL)
+    e_throw_NULPTR(mgr);
+
+  e_trycatch(lvof_resize(&mgr->commands, c_default_alloc), e_throw_THROWN());
+  return __OK__;
+}
+
+int c_deinit(cmdmgr_t* mgr) {
+  if (mgr == NULL)
+    e_throw_NULPTR(mgr);
+
+  e_trycatch(lvof_resize(&mgr->commands, 0), e_throw_THROWN());
+  return __OK__;
+}
+
+int c_register(cmdmgr_t* mgr, charview_t pattern, vaargs_t argstype, cmdfn_t handler) {
+  if (mgr == NULL)
+    e_throw_NULPTR(mgr);
+
+  if (handler == NULL)
+    e_throw_NULPTR(handler);
+
+  if (pattern.address == NULL)
+    e_throw_BADOBJ(pattern.address);
+
+  if (argstype.address == NULL)
+    e_throw_BADOBJ(argstype.address);
+
+  cmd_t cmd;
+  cmd.pattern = pattern;
+  cmd.cargstype.address = argstype.address;
+  cmd.cargstype.count = argstype.count;
+  cmd.handler = handler;
+  e_trycatch(avof_alloc(&cmd.carguments, argstype.count), e_throw_THROWN());
+  e_trycatch(lvof_append(&mgr->commands, &cmd), {
+    avof_free(&cmd.carguments);
+    e_throw_THROWN();
+  });
+
+  return __OK__;
+}
+
+int c_find(cmdmgr_t* mgr, charview_t pattern, cmd_t* out) {
+  if (mgr == NULL)
+    e_throw_NULPTR(mgr);
+
+  if (out == NULL)
+    e_throw_NULPTR(out);
+
+  if (pattern.address == NULL)
+    e_throw_BADOBJ(pattern.address);
+
+  cmd_t* cmd;
+  lvof_foreach(cmd, &mgr->commands) {
+  }
+
+  return __OK__;
+}
+
+int c_translate(cmd_t* cmd) {
+  return __OK__;
+}
+
+int c_execute(cmd_t* cmd) {
+  return __OK__;
 }

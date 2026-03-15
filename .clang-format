@@ -4,7 +4,7 @@ AlignEscapedNewlines: Right
 AlignOperands: AlignAfterOperator
 #AlignConsecutiveDeclarations: true
 AllowAllArgumentsOnNextLine: true
-AllowShortBlocksOnASingleLine: true
+AllowShortBlocksOnASingleLine: false
 AllowShortCaseLabelsOnASingleLine: false
 AllowShortEnumsOnASingleLine: false
 AllowShortFunctionsOnASingleLine: false

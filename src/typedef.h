@@ -31,31 +31,8 @@ union vunion {
 /*
  * Value
  */
-struct value {
+typedef struct value {
   enum vtype type;
-  union vunion cvu;
+  union vunion poly;
   size_t size;
-};
-
-/*
- * Type ignorant arrayview
- */
-typedef struct {
-  void* address;
-  size_t count;
-} arrayview_t;
-
-/*
- * Generic macro of arrayview
- */
-#define arrayviewof_t(T)                                                                 \
-  struct {                                                                               \
-    T* address;                                                                          \
-    size_t count;                                                                        \
-  }
-
-/*
- * For each element in list
- */
-#define avof_foreach(var, av)                                                            \
-  for (var = (av)->address; var != (av)->address + (av)->count; var++)
+} value_t;

@@ -21,6 +21,7 @@ enum {
   ENOTIMP,
   ETHROWN,
   EUNKERR,
+  EUSRDEF,
 };
 
 /*******************************************************************************
@@ -39,10 +40,10 @@ typedef struct {
 typedef struct {
   errmsg_t errmsg;
   here_t here;
-} error_t;
+} errinf_t;
 
 typedef struct {
-  const error_t list[e_calltrace_size];
+  const errinf_t list[e_calltrace_size];
   const uint64_t count;
 } calltrace_t;
 
@@ -58,10 +59,14 @@ typedef struct {
     e_report(e_lastcode(), "Fault caught !");                                            \
     goto e_lcl_catch_label;                                                              \
   }
+
 #define e_trycatch(fn, cleanup)                                                          \
-  if (0 != fn) {                                                                         \
-    cleanup;                                                                             \
+  {                                                                                      \
+    if (0 != fn) {                                                                       \
+      cleanup;                                                                           \
+    }                                                                                    \
   }
+
 #define e_catch(var, code)                                                               \
   goto e_endlcl_catch_label;                                                             \
   e_lcl_catch_label: {                                                                   \
@@ -70,6 +75,7 @@ typedef struct {
   }                                                                                      \
   e_endlcl_catch_label:
 
+#define e_throw_USRDEF(format, ...) e_throw(EUSRDEF, format __VA_OPT__(, __VA_ARGS__))
 #define e_throw_NULPTR(var) e_throw(ENULPTR, "value of '%s' was '%p'.", #var, var)
 #define e_throw_SIGSEG(var) e_throw(ESIGSEG, "ptr '%s' was '%p'.", #var, var)
 #define e_throw_BADOBJ(var) e_throw(EBADOBJ, "state of '%s' is invalid.", #var)

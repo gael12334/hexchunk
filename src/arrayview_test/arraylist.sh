@@ -2,8 +2,8 @@
 # Copyright (c) 2026 Gaël Fortier <gael.fortier.1@ens.etsmtl.ca>
 #
 
-files=("parser.c" "../parser.c" "../error.c" )
-output="parser.elf"
+files=("arrayview.c" "../arrayview.c" "../error.c")
+output="arrayview.elf"
 
 gcc ${files[@]} -o $output -ggdb
 if [ $? -eq 0 ]; then
